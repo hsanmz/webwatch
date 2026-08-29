@@ -158,8 +158,8 @@ export async function handleTelegramUpdate(update: {
   const text = message?.text?.trim();
   if (!chatId || !text?.startsWith("/")) return;
 
-  const [rawCommand, ...args] = text.split(/\s+/);
-  const command = rawCommand.split("@")[0].toLowerCase();
+  const [rawCommand = "", ...args] = text.split(/\s+/);
+  const command = (rawCommand.split("@")[0] ?? "").toLowerCase();
 
   if (command === "/start") {
     return sendTelegram(chatId, await handleStart(chatId, args[0], message?.from?.username ?? null));
