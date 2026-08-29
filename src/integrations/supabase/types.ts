@@ -14,7 +14,172 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      checks: {
+        Row: {
+          checked_at: string
+          error_message: string | null
+          id: string
+          is_up: boolean
+          response_time_ms: number | null
+          site_id: string
+          status_code: number | null
+        }
+        Insert: {
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          is_up: boolean
+          response_time_ms?: number | null
+          site_id: string
+          status_code?: number | null
+        }
+        Update: {
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          is_up?: boolean
+          response_time_ms?: number | null
+          site_id?: string
+          status_code?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      incidents: {
+        Row: {
+          error_message: string | null
+          id: string
+          resolved_at: string | null
+          site_id: string
+          started_at: string
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          resolved_at?: string | null
+          site_id: string
+          started_at?: string
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          resolved_at?: string | null
+          site_id?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incidents_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sites: {
+        Row: {
+          check_keyword: string | null
+          consecutive_failures: number
+          created_at: string
+          current_status: string
+          fail_threshold: number
+          id: string
+          interval_seconds: number
+          is_active: boolean
+          last_checked_at: string | null
+          last_notified_at: string | null
+          name: string | null
+          url: string
+          user_id: string
+        }
+        Insert: {
+          check_keyword?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          current_status?: string
+          fail_threshold?: number
+          id?: string
+          interval_seconds?: number
+          is_active?: boolean
+          last_checked_at?: string | null
+          last_notified_at?: string | null
+          name?: string | null
+          url: string
+          user_id: string
+        }
+        Update: {
+          check_keyword?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          current_status?: string
+          fail_threshold?: number
+          id?: string
+          interval_seconds?: number
+          is_active?: boolean
+          last_checked_at?: string | null
+          last_notified_at?: string | null
+          name?: string | null
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      telegram_accounts: {
+        Row: {
+          chat_id: string
+          linked_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          chat_id: string
+          linked_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          chat_id?: string
+          linked_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      telegram_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          status: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          status?: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          status?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
