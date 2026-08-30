@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -218,7 +218,13 @@ function Dashboard() {
           {sites.data?.map((site) => (
             <article key={site.id} className="flex flex-wrap items-center justify-between gap-4 p-5">
               <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold">{site.name || site.url}</h3>
+                <Link
+                  to="/sites/$id"
+                  params={{ id: site.id }}
+                  className="truncate text-sm font-semibold hover:text-primary"
+                >
+                  {site.name || site.url}
+                </Link>
                 <p className="truncate font-mono text-xs text-muted-foreground">{site.url}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-4">
                   <StatusDot status={site.current_status} active={site.is_active} />
