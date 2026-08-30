@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedSitesIdRouteImport } from './routes/_authenticated/sites.$id'
 import { Route as ApiPublicCronRunRouteImport } from './routes/api/public/cron/run'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 
@@ -35,6 +36,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSitesIdRoute = AuthenticatedSitesIdRouteImport.update({
+  id: '/sites/$id',
+  path: '/sites/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicCronRunRoute = ApiPublicCronRunRouteImport.update({
   id: '/api/public/cron/run',
   path: '/api/public/cron/run',
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/sites/$id'
     | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -83,6 +93,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/sites/$id'
     | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   id:
@@ -91,6 +102,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/dashboard'
+    | '/_authenticated/sites/$id'
     | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
@@ -133,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sites/$id': {
+      id: '/_authenticated/sites/$id'
+      path: '/sites/$id'
+      fullPath: '/sites/$id'
+      preLoaderRoute: typeof AuthenticatedSitesIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/cron/run': {
       id: '/api/public/cron/run'
       path: '/api/public/cron/run'
@@ -152,10 +171,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedSitesIdRoute: typeof AuthenticatedSitesIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedSitesIdRoute: AuthenticatedSitesIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
