@@ -1,0 +1,7 @@
+{
+  "name": "@webwatch/sdk",
+  "version": "1.0.0",
+  "description": "APM SDK for WebWatch",
+  "main": "index.js",
+  "type": "module"
+}

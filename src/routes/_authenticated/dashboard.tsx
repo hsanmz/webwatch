@@ -459,7 +459,7 @@ function Dashboard() {
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3 w-3" />{" "}
                       {site.last_checked_at
-                        ? `cek ${new Date(site.last_checked_at).toLocaleTimeString().slice(0, 5)}`
+                        ? `cek ${new Date(site.last_checked_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }).slice(0, 5) + ' WIB'}`
                         : "belum dicek"}
                     </span>
                   </div>

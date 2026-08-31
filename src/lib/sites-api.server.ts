@@ -365,7 +365,7 @@ export async function verifySite(request: Request): Promise<Response> {
       headers: { "User-Agent": "WebWatch-Verifier/1.0" },
     });
     if (!res.ok) {
-      return json({ ok: false, error: "file_not_found" });
+      return json({ error: "file_not_found" }, 400);
     }
     const text = await res.text();
     if (text.includes(site.verification_token)) {
@@ -380,9 +380,9 @@ export async function verifySite(request: Request): Promise<Response> {
         return json({ error: "server_error" }, 500);
       }
     } else {
-      return json({ ok: false, error: "token_mismatch" });
+      return json({ error: "token_mismatch" }, 400);
     }
   } catch (e) {
-    return json({ ok: false, error: "network_error" });
+    return json({ error: "network_error" }, 400);
   }
 }

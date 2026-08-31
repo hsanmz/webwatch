@@ -13,15 +13,18 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as StatusRouteImport } from './routes/status'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ApiIngestRouteImport } from './routes/api/ingest'
 import { Route as ApiSitesRouteImport } from './routes/api/sites'
+import { Route as ApiSystemStatusRouteImport } from './routes/api/system-status'
 import { Route as AuthenticatedSitesIdRouteImport } from './routes/_authenticated/sites.$id'
 import { Route as ApiAuthLinkStatusRouteImport } from './routes/api/auth/link-status'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthOtpRouteImport } from './routes/api/auth/otp'
 import { Route as ApiAuthVerifyRouteImport } from './routes/api/auth/verify'
+import { Route as ApiPublicSdkRouteImport } from './routes/api/public/sdk'
 import { Route as ApiSitesDetailRouteImport } from './routes/api/sites/detail'
 import { Route as ApiSitesEventsRouteImport } from './routes/api/sites/events'
 import { Route as ApiSitesKeysRouteImport } from './routes/api/sites/keys'
@@ -48,6 +51,11 @@ const DocsRoute = DocsRouteImport.update({
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -61,6 +69,11 @@ const ApiIngestRoute = ApiIngestRouteImport.update({
 const ApiSitesRoute = ApiSitesRouteImport.update({
   id: '/api/sites',
   path: '/api/sites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSystemStatusRoute = ApiSystemStatusRouteImport.update({
+  id: '/api/system-status',
+  path: '/api/system-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedSitesIdRoute = AuthenticatedSitesIdRouteImport.update({
@@ -91,6 +104,11 @@ const ApiAuthOtpRoute = ApiAuthOtpRouteImport.update({
 const ApiAuthVerifyRoute = ApiAuthVerifyRouteImport.update({
   id: '/api/auth/verify',
   path: '/api/auth/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSdkRoute = ApiPublicSdkRouteImport.update({
+  id: '/api/public/sdk',
+  path: '/api/public/sdk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSitesDetailRoute = ApiSitesDetailRouteImport.update({
@@ -129,15 +147,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
+  '/status': typeof StatusRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
+  '/api/system-status': typeof ApiSystemStatusRoute
   '/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/auth/link-status': typeof ApiAuthLinkStatusRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
+  '/api/public/sdk': typeof ApiPublicSdkRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -149,15 +170,18 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
+  '/status': typeof StatusRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
+  '/api/system-status': typeof ApiSystemStatusRoute
   '/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/auth/link-status': typeof ApiAuthLinkStatusRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
+  '/api/public/sdk': typeof ApiPublicSdkRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -171,15 +195,18 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
+  '/status': typeof StatusRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
+  '/api/system-status': typeof ApiSystemStatusRoute
   '/_authenticated/sites/$id': typeof AuthenticatedSitesIdRoute
   '/api/auth/link-status': typeof ApiAuthLinkStatusRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
+  '/api/public/sdk': typeof ApiPublicSdkRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -193,15 +220,18 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/docs'
+    | '/status'
     | '/dashboard'
     | '/api/ingest'
     | '/api/sites'
+    | '/api/system-status'
     | '/sites/$id'
     | '/api/auth/link-status'
     | '/api/auth/logout'
     | '/api/auth/me'
     | '/api/auth/otp'
     | '/api/auth/verify'
+    | '/api/public/sdk'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -213,15 +243,18 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/docs'
+    | '/status'
     | '/dashboard'
     | '/api/ingest'
     | '/api/sites'
+    | '/api/system-status'
     | '/sites/$id'
     | '/api/auth/link-status'
     | '/api/auth/logout'
     | '/api/auth/me'
     | '/api/auth/otp'
     | '/api/auth/verify'
+    | '/api/public/sdk'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -234,15 +267,18 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/docs'
+    | '/status'
     | '/_authenticated/dashboard'
     | '/api/ingest'
     | '/api/sites'
+    | '/api/system-status'
     | '/_authenticated/sites/$id'
     | '/api/auth/link-status'
     | '/api/auth/logout'
     | '/api/auth/me'
     | '/api/auth/otp'
     | '/api/auth/verify'
+    | '/api/public/sdk'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -256,13 +292,16 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   DocsRoute: typeof DocsRoute
+  StatusRoute: typeof StatusRoute
   ApiIngestRoute: typeof ApiIngestRoute
   ApiSitesRoute: typeof ApiSitesRouteWithChildren
+  ApiSystemStatusRoute: typeof ApiSystemStatusRoute
   ApiAuthLinkStatusRoute: typeof ApiAuthLinkStatusRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthOtpRoute: typeof ApiAuthOtpRoute
   ApiAuthVerifyRoute: typeof ApiAuthVerifyRoute
+  ApiPublicSdkRoute: typeof ApiPublicSdkRoute
   ApiPublicCronRunRoute: typeof ApiPublicCronRunRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
@@ -297,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -316,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/api/sites'
       fullPath: '/api/sites'
       preLoaderRoute: typeof ApiSitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/system-status': {
+      id: '/api/system-status'
+      path: '/api/system-status'
+      fullPath: '/api/system-status'
+      preLoaderRoute: typeof ApiSystemStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/sites/$id': {
@@ -358,6 +411,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/verify'
       fullPath: '/api/auth/verify'
       preLoaderRoute: typeof ApiAuthVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sdk': {
+      id: '/api/public/sdk'
+      path: '/api/public/sdk'
+      fullPath: '/api/public/sdk'
+      preLoaderRoute: typeof ApiPublicSdkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sites/detail': {
@@ -441,13 +501,16 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DocsRoute: DocsRoute,
+  StatusRoute: StatusRoute,
   ApiIngestRoute: ApiIngestRoute,
   ApiSitesRoute: ApiSitesRouteWithChildren,
+  ApiSystemStatusRoute: ApiSystemStatusRoute,
   ApiAuthLinkStatusRoute: ApiAuthLinkStatusRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthOtpRoute: ApiAuthOtpRoute,
   ApiAuthVerifyRoute: ApiAuthVerifyRoute,
+  ApiPublicSdkRoute: ApiPublicSdkRoute,
   ApiPublicCronRunRoute: ApiPublicCronRunRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }

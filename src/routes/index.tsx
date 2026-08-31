@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState, useRef } from "react";
 import {
   Activity,
   ArrowRight,
@@ -18,50 +18,27 @@ import { Button } from "@/components/ui/button";
 import { StatusBoard } from "@/components/marketing/status-board";
 import { TelegramAlerts } from "@/components/marketing/telegram-alerts";
 import { BentoFeatures } from "@/components/marketing/bento-features";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "WebWatch — Monitor Uptime Website + Alert Telegram" },
+      { title: "WebWatch — APM & Uptime Monitoring + Alert Telegram" },
       {
         name: "description",
         content:
-          "Pantau website kamu tiap menit. WebWatch kirim notifikasi Telegram instan saat situs down dan saat sudah pulih kembali.",
+          "Pantau error aplikasi (APM) dan uptime website kamu secara real-time. WebWatch kirim notifikasi Telegram instan saat terjadi crash atau situs down.",
       },
-      { property: "og:title", content: "WebWatch — Monitor Uptime Website + Alert Telegram" },
+      { property: "og:title", content: "WebWatch — APM & Uptime Monitoring" },
       {
         property: "og:description",
         content:
-          "Monitoring uptime otomatis dengan keyword check, cek SSL, riwayat insiden 30 hari, dan alert Telegram real-time.",
+          "Full-stack Application Performance Monitoring (APM) dan Uptime monitoring dengan alert Telegram real-time.",
       },
     ],
   }),
   component: Landing,
 });
-
-function useReveal() {
-  useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
-    if (els.length === 0) return;
-    if (typeof IntersectionObserver === "undefined") {
-      els.forEach((el) => el.classList.add("visible"));
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("visible");
-            io.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-}
 
 const NAV = [
   { href: "#fitur", label: "Fitur" },
@@ -80,18 +57,18 @@ const STATS = [
 const STEPS = [
   {
     icon: Rocket,
-    title: "Buat akun gratis",
-    body: "Daftar aman lewat email. Satu menit selesai, sama sekali tanpa butuh kartu kredit.",
+    title: "Buat akun & Verifikasi",
+    body: "Daftar gratis, masukkan URL website, lalu upload webwatch-verify.txt untuk membuktikan kepemilikan domain.",
   },
   {
     icon: MessageSquare,
     title: "Hubungkan Telegram",
-    body: "Buka bot WebWatch di Telegram, tekan /start, lalu salin token ke dashboard.",
+    body: "Dapatkan notifikasi instan langsung ke HP-mu dengan menghubungkan akun ke bot Telegram resmi WebWatch.",
   },
   {
     icon: Rows3,
-    title: "Tambah situsmu",
-    body: "Isi URL website kamu. Mulai detik berikutnya situsmu dipantau, alert langsung aktif.",
+    title: "Pasang SDK WebWatch",
+    body: "Install npm package @webwatch/sdk di frontend atau backend-mu. Semua error & log akan otomatis tertangkap!",
   },
 ];
 
@@ -130,7 +107,9 @@ const TICKER = [
 ];
 
 function Landing() {
-  useReveal();
+  const { scrollY } = useScroll();
+  const heroY = useTransform(scrollY, [0, 1000], [0, 400]);
+  const heroOpacity = useTransform(scrollY, [0, 600], [1, 0]);
 
   return (
     <div
@@ -139,16 +118,21 @@ function Landing() {
         backgroundImage: `radial-gradient(75rem 50rem at 50% 0%, oklch(0.72 0.12 178 / 0.15), transparent 70%)`,
       }}
     >
-      <div className="bg-primary/10 border-b border-primary/20 text-primary">
-        <div className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.25em] font-semibold">
+      <div className="bg-primary/10 border-b border-primary/20 text-primary relative overflow-hidden">
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.25em] font-semibold"
+        >
           <Zap className="h-3.5 w-3.5" />
           Gratis sepenuhnya selama masa beta — tanpa kartu kredit
-        </div>
+        </motion.div>
       </div>
 
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md transition-all">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+          <Link to="/" className="flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 duration-200">
             <img src="/logo.png" alt="WebWatch" className="h-9 w-auto" />
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
@@ -156,9 +140,10 @@ function Landing() {
               <a
                 key={item.href}
                 href={item.href}
-                className="transition-colors hover:text-foreground"
+                className="relative transition-colors hover:text-foreground group"
               >
                 {item.label}
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
               </a>
             ))}
           </nav>
@@ -167,13 +152,13 @@ function Landing() {
               <span className="live-dot h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
               Sistem Normal
             </span>
-            <Button asChild size="sm" variant="ghost" className="font-semibold">
+            <Button asChild size="sm" variant="ghost" className="font-semibold transition-all hover:bg-card">
               <Link to="/auth">Masuk</Link>
             </Button>
             <Button
               asChild
               size="sm"
-              className="shadow-md transition-transform hover:scale-105 font-semibold"
+              className="shadow-md transition-transform hover:scale-105 active:scale-95 font-semibold"
             >
               <Link to="/auth">Mulai Gratis</Link>
             </Button>
@@ -182,103 +167,145 @@ function Landing() {
       </header>
 
       <main>
-        {/* HERO SECTION */}
-        <section className="relative mx-auto max-w-5xl px-4 pb-20 pt-20 text-center sm:px-6 lg:px-8 lg:pt-32">
+        {/* HERO SECTION with Parallax & 3D Tilt like feel */}
+        <section className="relative mx-auto max-w-5xl px-4 pb-20 pt-20 text-center sm:px-6 lg:px-8 lg:pt-32 overflow-visible">
           <div className="absolute top-0 -z-10 h-full w-full bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,oklch(0.58_0.12_178/0.12),transparent)] blur-3xl pointer-events-none" />
 
-          <div
-            className="rise flex flex-col items-center relative z-10"
-            style={{ animationDelay: "0.05s" }}
+          <motion.div 
+            style={{ y: heroY, opacity: heroOpacity }}
+            className="flex flex-col items-center relative z-10"
           >
-            <div className="floaty inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-primary shadow-sm mb-4">
-              <span className="live-dot h-2 w-2 rounded-full bg-primary" />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, type: "spring", bounce: 0.5 }}
+              className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-primary shadow-sm mb-4 hover:bg-card transition-colors cursor-default"
+            >
+              <motion.span 
+                animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }} 
+                transition={{ duration: 2, repeat: Infinity }} 
+                className="h-2 w-2 rounded-full bg-primary" 
+              />
               Sistem Monitoring Aktif 24/7
-            </div>
+            </motion.div>
 
-            <h1 className="mt-6 max-w-4xl font-display text-5xl font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-[5rem] sm:leading-[1.05]">
-              Website kamu down? <br className="hidden sm:block" />
-              <span className="text-gradient">Kamu tahu duluan.</span>
-            </h1>
+            <motion.h1 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="mt-6 max-w-4xl font-display text-5xl font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-[5rem] sm:leading-[1.05]"
+            >
+              Aplikasi kamu error? <br className="hidden sm:block" />
+              <span className="text-gradient inline-block">Tahu sebelum user komplain.</span>
+            </motion.h1>
 
-            <p className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl font-medium">
-              Pantau situs tiap menit. Dapatkan alert Telegram instan saat ada gangguan dan saat
-              pulih kembali.{" "}
-              <strong className="text-foreground font-semibold">
-                Tanpa delay, tanpa false alarm.
-              </strong>
-            </p>
+            <motion.p 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl font-medium"
+            >
+              Platform <strong>Application Performance Monitoring (APM)</strong> & Uptime termudah. Tangkap error Frontend/Backend secara *real-time* dan terima alert langsung via Telegram.
+            </motion.p>
 
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-5">
+            <motion.div 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mt-10 flex flex-wrap items-center justify-center gap-5"
+            >
               <Button
                 asChild
                 size="lg"
-                className="h-14 rounded-full px-10 text-lg font-bold shadow-glow transition-all hover:scale-105 hover:shadow-primary/30"
+                className="group h-14 rounded-full px-10 text-lg font-bold shadow-[0_0_40px_-10px_rgba(20,184,166,0.5)] transition-all hover:scale-105 hover:shadow-[0_0_60px_-15px_rgba(20,184,166,0.7)]"
               >
                 <Link to="/auth">
-                  Mulai Gratis Sekarang <ArrowRight className="ml-2 h-5 w-5" />
+                  Mulai Gratis Sekarang <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Link>
               </Button>
               <Button
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-14 rounded-full px-8 text-base font-bold transition-all hover:bg-primary/5 hover:text-foreground"
+                className="h-14 rounded-full px-8 text-base font-bold transition-all hover:bg-primary/5 hover:text-foreground hover:scale-105"
               >
                 <a href="#cara-kerja">
                   <Activity className="mr-2 h-4 w-4 text-primary" /> Lihat Cara Kerja
                 </a>
               </Button>
-            </div>
+            </motion.div>
 
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1, delay: 0.8 }}
+              className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold"
+            >
               {[
                 { text: "1 Menit Setup", icon: Zap },
                 { text: "Tanpa Kartu Kredit", icon: ShieldCheck },
                 { text: "Bot Telegram Siap Pakai", icon: MessageSquare },
-              ].map((item) => (
-                <span key={item.text} className="flex items-center gap-2">
+              ].map((item, i) => (
+                <motion.span 
+                  key={item.text} 
+                  whileHover={{ scale: 1.1, color: "hsl(var(--foreground))" }}
+                  className="flex items-center gap-2 cursor-default transition-colors"
+                >
                   <item.icon className="h-4 w-4 text-primary" />
                   {item.text}
-                </span>
+                </motion.span>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
-          <div
-            className="rise relative mx-auto mt-24 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-12 max-w-5xl"
-            style={{ animationDelay: "0.2s" }}
+          {/* 3D-like Floating Dashboards */}
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.4, type: "spring", bounce: 0.3 }}
+            className="relative mx-auto mt-24 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-12 max-w-5xl"
           >
             <div className="absolute -inset-10 -z-10 rounded-[3rem] bg-gradient-to-b from-primary/10 via-transparent to-transparent blur-3xl opacity-70" />
-            <div className="floaty w-full max-w-md lg:max-w-xl shrink-0">
+            <motion.div 
+              whileHover={{ y: -10, rotateX: 2, rotateY: -2 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="w-full max-w-md lg:max-w-xl shrink-0"
+              style={{ perspective: "1000px" }}
+            >
               <StatusBoard />
-            </div>
-            <div className="hidden lg:block shrink-0 pt-4">
+            </motion.div>
+            <motion.div 
+              whileHover={{ y: -10, rotateX: 2, rotateY: 2 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="hidden lg:block shrink-0 pt-4"
+              style={{ perspective: "1000px" }}
+            >
               <TelegramAlerts />
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </section>
 
-        {/* MARQUEE */}
-        <section className="overflow-hidden border-y border-border bg-card/50 py-3">
-          <div className="marquee-mask">
-            <div className="ticker-track gap-10 px-10">
-              {[0, 1].map((copy) => (
-                <div key={copy} className="flex shrink-0 items-center gap-12">
-                  {TICKER.map((item) => (
-                    <span
-                      key={`${copy}-${item.host}`}
-                      className="flex items-center gap-2 font-mono text-xs font-medium text-foreground/80"
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full ${item.up ? "bg-teal-400" : "bg-red-400"}`}
-                      />
-                      {item.host}
-                      <span className="opacity-50 text-foreground/50">{item.ms}</span>
-                    </span>
-                  ))}
-                </div>
+        {/* MARQUEE with Framer Motion (Continuous Scroll) */}
+        <section className="overflow-hidden border-y border-border bg-card/50 py-3 relative">
+          <div className="flex whitespace-nowrap">
+            <motion.div 
+              animate={{ x: [0, -1035] }}
+              transition={{ repeat: Infinity, ease: "linear", duration: 20 }}
+              className="flex shrink-0 gap-10 px-5"
+            >
+              {[...TICKER, ...TICKER, ...TICKER].map((item, idx) => (
+                <span
+                  key={`${idx}-${item.host}`}
+                  className="flex items-center gap-2 font-mono text-xs font-medium text-foreground/80 hover:text-foreground transition-colors cursor-default"
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${item.up ? "bg-teal-400" : "bg-red-400"}`}
+                  />
+                  {item.host}
+                  <span className="opacity-50 text-foreground/50">{item.ms}</span>
+                </span>
               ))}
-            </div>
+            </motion.div>
           </div>
         </section>
 
@@ -286,10 +313,14 @@ function Landing() {
         <section className="mx-auto max-w-6xl px-4 pb-24 pt-24 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {STATS.map((stat, i) => (
-              <div
+              <motion.div
                 key={stat.label}
-                className="panel reveal flex items-start gap-4 p-6 transition-all hover:border-primary/40 hover:shadow-glow"
-                style={{ transitionDelay: `${i * 90}ms` }}
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                whileHover={{ y: -5, borderColor: "rgba(20,184,166,0.4)" }}
+                className="panel flex items-start gap-4 p-6 transition-colors shadow-sm hover:shadow-[0_0_20px_-5px_rgba(20,184,166,0.2)] bg-card border border-border rounded-2xl cursor-default"
               >
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <stat.icon className="h-6 w-6" />
@@ -300,15 +331,20 @@ function Landing() {
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground leading-snug">{stat.label}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </section>
 
-        {/* CARA KERJA */}
-        <section id="cara-kerja" className="border-t border-border">
+        {/* CARA KERJA with Scroll reveals */}
+        <section id="cara-kerja" className="border-t border-border overflow-hidden">
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
-            <div className="max-w-3xl text-center mx-auto">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-3xl text-center mx-auto"
+            >
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary font-semibold">
                 cara kerja
               </p>
@@ -319,22 +355,27 @@ function Landing() {
                 Tidak ada instalasi, tidak ada konfigurasi rumit, tidak ada kartu kredit. Langsung
                 mulai dalam hitungan detik.
               </p>
-            </div>
+            </motion.div>
+            
             <div className="relative mt-16 grid gap-8 md:grid-cols-3">
               <div
                 className="absolute left-0 right-0 top-12 hidden border-t-2 border-dashed border-border/60 md:block"
                 aria-hidden="true"
               />
               {STEPS.map((step, i) => (
-                <article
+                <motion.article
                   key={step.title}
-                  className="panel reveal relative p-8 text-center transition-transform hover:-translate-y-1"
-                  style={{ transitionDelay: `${i * 120}ms` }}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 0.6, delay: i * 0.2 }}
+                  whileHover={{ y: -10 }}
+                  className="panel relative p-8 text-center bg-card border border-border rounded-3xl z-10 shadow-sm"
                 >
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm ring-4 ring-background">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-4 ring-background">
                     <step.icon className="h-8 w-8" />
                   </div>
-                  <span className="absolute -top-3 right-6 font-mono text-5xl font-black text-muted-foreground/10">
+                  <span className="absolute -top-3 right-6 font-mono text-5xl font-black text-muted-foreground/10 select-none">
                     0{i + 1}
                   </span>
                   <h3 className="mt-6 font-display text-xl font-bold text-foreground">
@@ -343,7 +384,7 @@ function Landing() {
                   <p className="mt-3 text-base text-muted-foreground leading-relaxed">
                     {step.body}
                   </p>
-                </article>
+                </motion.article>
               ))}
             </div>
           </div>
@@ -352,7 +393,12 @@ function Landing() {
         {/* FITUR BENTO */}
         <section id="fitur" className="border-t border-border">
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto text-center">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-3xl mx-auto text-center"
+            >
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary font-semibold">
                 Fitur Andalan
               </p>
@@ -365,18 +411,31 @@ function Landing() {
                   Apakah situs saya baik-baik saja?
                 </span>
               </p>
-            </div>
-            <div className="mt-16">
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.8 }}
+              className="mt-16"
+            >
               <BentoFeatures />
-            </div>
+            </motion.div>
           </div>
         </section>
 
         {/* HARGA */}
-        <section id="harga" className="border-t border-border relative">
+        <section id="harga" className="border-t border-border relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 h-[500px] w-[500px] bg-[radial-gradient(circle_at_center,oklch(0.58_0.12_178/0.05),transparent_70%)] blur-3xl pointer-events-none" />
+          
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
-            <div className="text-center mx-auto max-w-3xl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="text-center mx-auto max-w-3xl"
+            >
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary font-semibold">
                 harga
               </p>
@@ -386,18 +445,34 @@ function Landing() {
               <p className="mt-4 text-lg text-muted-foreground font-medium">
                 Serius dibangun untuk dipakai, bukan sekadar masa percobaan.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="mx-auto mt-16 max-w-md rounded-[2rem] border border-primary/20 bg-card p-10 shadow-glow relative overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-primary/20">
-              <div className="absolute -top-12 -right-12 p-4 opacity-5 text-primary rotate-12 pointer-events-none transition-transform duration-700 hover:rotate-45">
-                <Zap className="h-48 w-48" />
-              </div>
+            <motion.div 
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              whileHover={{ y: -8, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="mx-auto mt-16 max-w-md rounded-[2rem] border border-primary/20 bg-card p-10 shadow-[0_0_40px_-15px_rgba(20,184,166,0.3)] relative overflow-hidden"
+            >
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 50, repeat: Infinity, ease: "linear" }}
+                className="absolute -top-20 -right-20 p-4 opacity-5 text-primary pointer-events-none"
+              >
+                <Zap className="h-64 w-64" />
+              </motion.div>
+              
               <div className="relative z-10">
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-display text-2xl font-black text-foreground">Free Plan</h3>
                     <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-primary font-bold">
-                      <span className="live-dot h-1.5 w-1.5 rounded-full bg-primary" />
+                      <motion.span 
+                        animate={{ opacity: [1, 0.4, 1] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                        className="h-1.5 w-1.5 rounded-full bg-primary" 
+                      />
                       Akses Beta Terbuka
                     </span>
                   </div>
@@ -420,44 +495,65 @@ function Landing() {
                     "Alert Telegram instan & real-time",
                     "Peringatan Sertifikat SSL",
                     "Riwayat uptime 30 hari + visualisasi grafik",
-                  ].map((item) => (
-                    <li key={item} className="flex items-start gap-3">
+                  ].map((item, i) => (
+                    <motion.li 
+                      key={item} 
+                      initial={{ opacity: 0, x: -10 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 + (i * 0.1) }}
+                      className="flex items-start gap-3"
+                    >
                       <div className="mt-0.5 rounded-full bg-primary/10 p-1">
                         <Check className="h-3 w-3 text-primary font-bold" />
                       </div>
                       <span className="text-foreground/90">{item}</span>
-                    </li>
+                    </motion.li>
                   ))}
                 </ul>
                 <Button
                   asChild
                   size="lg"
-                  className="mt-10 w-full rounded-xl h-14 text-base font-bold shadow-glow transition-all hover:scale-[1.02]"
+                  className="group mt-10 w-full rounded-xl h-14 text-base font-bold shadow-[0_0_20px_-5px_rgba(20,184,166,0.4)] transition-all hover:scale-[1.03]"
                 >
                   <Link to="/auth">
-                    Klaim Akun Gratis Sekarang <ArrowRight className="ml-2 h-4 w-4" />
+                    Klaim Akun Gratis Sekarang <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
                 </Button>
                 <p className="mt-5 text-center font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest font-bold">
                   *ketentuan bisa berubah setelah rilis penuh
                 </p>
               </div>
-            </div>
+            </motion.div>
           </div>
         </section>
 
         {/* FAQ */}
         <section id="faq" className="border-t border-border">
           <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
-            <p className="text-center font-mono text-xs uppercase tracking-[0.3em] text-primary font-semibold">
-              faq
-            </p>
-            <h2 className="mt-4 text-center font-display text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-              Pertanyaan yang Sering Muncul
-            </h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <p className="text-center font-mono text-xs uppercase tracking-[0.3em] text-primary font-semibold">
+                faq
+              </p>
+              <h2 className="mt-4 text-center font-display text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
+                Pertanyaan yang Sering Muncul
+              </h2>
+            </motion.div>
+            
             <div className="mt-14 space-y-4">
               {FAQS.map((item, i) => (
-                <FaqItem key={item.q} q={item.q} a={item.a} open={i === 0} />
+                <motion.div
+                  key={item.q}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <FaqItem q={item.q} a={item.a} open={i === 0} />
+                </motion.div>
               ))}
             </div>
           </div>
@@ -472,38 +568,48 @@ function Landing() {
                 "radial-gradient(50rem 30rem at 20% 120%, oklch(0.58 0.12 178 / 0.15), transparent 60%), radial-gradient(40rem 25rem at 90% -30%, oklch(0.58 0.12 178 / 0.1), transparent 60%)",
             }}
           />
-          <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 py-32 text-center sm:px-6 lg:px-8">
-            <p className="floaty inline-flex items-center gap-2 rounded-full bg-primary/10 px-5 py-2 font-mono text-[11px] uppercase tracking-[0.25em] text-primary backdrop-blur-md shadow-sm border border-primary/20">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8 }}
+            className="relative mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 py-32 text-center sm:px-6 lg:px-8"
+          >
+            <motion.p 
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-5 py-2 font-mono text-[11px] uppercase tracking-[0.25em] text-primary backdrop-blur-md shadow-sm border border-primary/20"
+            >
               <Flame className="h-4 w-4" />
-              downtime itu mahal. jangan biarkan diam-diam.
-            </p>
+              error di production itu mahal. jangan dibiarkan.
+            </motion.p>
             <h2 className="font-display text-4xl font-black tracking-tight sm:text-[4.5rem] leading-[1.05]">
-              Berhenti Tahu Belakangan. <br />
-              <span className="text-primary drop-shadow-sm">Mulai Pantau Sekarang.</span>
+              Berhenti Menebak Error. <br />
+              <span className="text-primary drop-shadow-sm inline-block">Mulai Pantau Sekarang.</span>
             </h2>
             <p className="max-w-2xl text-base text-muted-foreground sm:text-xl leading-relaxed font-medium">
-              Daftar gratis, hubungkan Telegram, tambah situs — seluruhnya di bawah 5 menit.
-              Dapatkan peringatan di detik yang sama saat pengunjungmu gagal mengakses situs.
+              Daftar gratis, verifikasi domain, pasang NPM SDK — seluruhnya di bawah 5 menit.
+              Dapatkan tumpukan *stack trace* di detik yang sama saat aplikasimu *crash*.
             </p>
             <div className="mt-4 flex gap-4">
               <Button
                 asChild
                 size="lg"
-                className="rounded-full h-14 px-10 text-lg font-bold transition-all hover:scale-105 shadow-glow hover:shadow-primary/30"
+                className="group rounded-full h-14 px-10 text-lg font-bold transition-all hover:scale-105 shadow-[0_0_30px_-5px_rgba(20,184,166,0.5)] hover:shadow-[0_0_40px_-5px_rgba(20,184,166,0.7)]"
               >
                 <Link to="/auth">
-                  Mulai Gratis Sekarang <ArrowRight className="ml-2 h-5 w-5" />
+                  Mulai Gratis Sekarang <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Link>
               </Button>
             </div>
-          </div>
+          </motion.div>
         </section>
       </main>
 
-      <footer className="border-t border-border">
+      <footer className="border-t border-border bg-background">
         <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:px-8 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
-            <img src="/logo.png" alt="WebWatch" className="h-10 w-auto opacity-90" />
+            <img src="/logo.png" alt="WebWatch" className="h-10 w-auto opacity-90 transition-opacity hover:opacity-100" />
             <p className="mt-6 max-w-xs text-sm text-muted-foreground leading-relaxed">
               Uptime monitor modern dengan notifikasi Telegram instan. Didesain untuk developer yang
               benci false alarm.
@@ -524,6 +630,7 @@ function Landing() {
               { label: "Masuk / Login", href: "/auth" },
               { label: "Buat Akun Gratis", href: "/auth" },
               { label: "Buka Dashboard", href: "/dashboard" },
+              { label: "Dokumentasi", href: "/docs" },
             ]}
           />
           <div>
@@ -549,28 +656,38 @@ function Landing() {
 function FaqItem({ q, a, open }: { q: string; a: string; open: boolean }) {
   const [isOpen, setIsOpen] = useState(open);
   return (
-    <div className="panel overflow-hidden transition-all">
+    <div className="panel bg-card border border-border rounded-xl overflow-hidden transition-all hover:border-primary/30 hover:shadow-sm">
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left focus:outline-none"
       >
         <span className="font-display text-lg font-bold text-foreground">{q}</span>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 ${
-            isOpen ? "rotate-180 text-primary" : ""
-          }`}
-        />
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 transition-colors duration-300 ${
+              isOpen ? "text-primary" : "text-muted-foreground"
+            }`}
+          />
+        </motion.div>
       </button>
-      <div
-        className={`grid transition-all duration-300 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
-      >
-        <div className="overflow-hidden">
-          <p className="border-t border-border px-6 py-5 text-base leading-relaxed text-muted-foreground">
-            {a}
-          </p>
-        </div>
-      </div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <div className="border-t border-border/50 px-6 py-5 text-base leading-relaxed text-muted-foreground bg-black/20">
+              {a}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -583,18 +700,24 @@ function FooterCol({ title, links }: { title: string; links: { label: string; hr
       </h3>
       <ul className="mt-6 space-y-3 text-sm font-medium text-muted-foreground">
         {links.map((link) =>
-          link.href.startsWith("/") ? (
+          link.href.startsWith("/") || link.href.startsWith("#") ? (
             <li key={link.label}>
-              <Link
-                to={link.href as "/auth" | "/dashboard"}
-                className="transition-colors hover:text-foreground"
-              >
-                {link.label}
-              </Link>
+              {link.href.startsWith("/") ? (
+                <Link
+                  to={link.href as any}
+                  className="transition-colors hover:text-primary"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a href={link.href} className="transition-colors hover:text-primary">
+                  {link.label}
+                </a>
+              )}
             </li>
           ) : (
             <li key={link.label}>
-              <a href={link.href} className="transition-colors hover:text-foreground">
+              <a href={link.href} className="transition-colors hover:text-primary">
                 {link.label}
               </a>
             </li>

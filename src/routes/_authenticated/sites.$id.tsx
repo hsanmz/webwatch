@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/sites/$id")({
   component: SiteDetail,
@@ -410,9 +411,42 @@ function SiteDetail() {
                         {k.key}
                       </p>
                     </div>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {new Date(k.created_at).toLocaleDateString()}
-                    </span>
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(k.created_at).toLocaleDateString()}
+                      </span>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-7 text-xs font-medium">Cara Pasang</Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>Cara Memasang SDK (API Key: {k.name})</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-6 py-4">
+                            <div>
+                              <h3 className="font-semibold text-sm mb-2">1. Frontend (Browser / React / Vue / HTML)</h3>
+                              <p className="text-xs text-muted-foreground mb-2">Letakkan di dalam tag <code>&lt;head&gt;</code> pada file index.html aplikasimu.</p>
+                              <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
+<code className="text-blue-400">&lt;script</code> <code className="text-yellow-200">type</code>=<span className="text-green-300">"module"</span><code className="text-blue-400">&gt;</code>{'\n'}
+{'  '}<code className="text-blue-400">import</code> {'{'} WebWatch {'}'} <code className="text-blue-400">from</code> <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/public/sdk"</span>;{'\n\n'}
+{'  '}WebWatch.init(<span className="text-green-300">"{k.key}"</span>, <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/ingest"</span>);{'\n'}
+<code className="text-blue-400">&lt;/script&gt;</code>
+                              </pre>
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-sm mb-2">2. Backend (Node.js / Express)</h3>
+                              <p className="text-xs text-muted-foreground mb-2">Letakkan paling bawah sebelum <code>app.listen</code>.</p>
+                              <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
+<code className="text-blue-400">import</code> {'{'} WebWatch {'}'} <code className="text-blue-400">from</code> <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/public/sdk"</span>;{'\n\n'}
+WebWatch.init(<span className="text-green-300">"{k.key}"</span>, <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/ingest"</span>);{'\n'}
+app.use(WebWatch.expressErrorHandler());
+                              </pre>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </li>
                 ))}
               </ul>

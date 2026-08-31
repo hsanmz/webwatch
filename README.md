@@ -1,18 +1,16 @@
-# WebWatch
+# WebWatch APM & Uptime Monitoring
 
-WebWatch adalah aplikasi monitoring uptime website multi-user dengan notifikasi Telegram. WebWatch memantau situs kamu tiap menit dan mengirim alert instan saat website down **dan** saat pulih kembali — lengkap dengan cek keyword, cek SSL, serta riwayat & grafik uptime 30 hari.
+WebWatch adalah aplikasi pemantauan website generasi baru (seperti Sentry/Datadog) yang mendukung **Application Performance Monitoring (APM)** via SDK dan **Uptime Monitoring** dari luar. Dilengkapi dengan notifikasi Telegram *real-time*!
 
-## Fitur
+## Fitur Unggulan
 
-- **Pemantauan otomatis** — interval mulai 1 menit, timeout 10 detik, HTTP request dilakukan jarak jauh (Cloudflare Cron Trigger).
-- **Login OTP via Telegram** — tanpa password; kode 6 digit dikirim bot Telegram ke chat yang terhubung.
-- **Alert Telegram real-time** — notifikasi DOWN dan RECOVERED ke chat Telegram pemilik situs, lengkap dengan penyebab dan durasi downtime.
-- **Anti false alarm** — threshold kegagalan berturut-turut + cooldown 10 menit.
-- **Keyword check** — deteksi "soft down" (status 200 tapi halaman error/maintenance).
-- **Cek SSL & masa berlaku** — peringatan sertifikat mendekati kedaluwarsa (< 7 hari) atau sudah kadaluarsa.
-- **Riwayat & statistik** — uptime % 24 jam / 7 hari / 30 hari, grafik response time, daftar insiden.
-- **Retensi otomatis** — data riwayat diputar (rolling) 30 hari terakhir.
-- **Multi-user** — isolasi data per user, siapa pun bisa masuk dan memantau situsnya sendiri.
+- **Application Performance Monitoring (APM)** — Tangkap log dan error (Frontend & Backend) dari dalam aplikasi menggunakan WebWatch SDK via CDN (Tanpa `npm install`).
+- **Validasi Kepemilikan Domain** — Sistem verifikasi keamanan via file `webwatch-verify.txt`.
+- **API Keys & Ingestion Server** — Server *ingest* *batch-processing* yang aman (Bearer token) dan *scalable* untuk menangkap ribuan event.
+- **Pemantauan Uptime Aktif** — Cek HTTP dari luar tiap menit menggunakan Cloudflare Cron Trigger.
+- **Alert Telegram Instan** — Notifikasi saat SDK menangkap error kritis, atau saat server mati (DOWN/RECOVERED).
+- **Login OTP Telegram** — Keamanan tanpa *password*, menggunakan verifikasi chat bot Telegram.
+- **Multi-user** — Isolasi data penuh per pengguna di atas *database* Cloudflare D1.
 
 ## Tech stack
 
