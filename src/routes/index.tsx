@@ -185,23 +185,29 @@ function Landing() {
         {/* HERO SECTION */}
         <section className="relative mx-auto max-w-5xl px-4 pb-20 pt-20 text-center sm:px-6 lg:px-8 lg:pt-32">
           <div className="absolute top-0 -z-10 h-full w-full bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,oklch(0.58_0.12_178/0.12),transparent)] blur-3xl pointer-events-none" />
-          
-          <div className="rise flex flex-col items-center relative z-10" style={{ animationDelay: "0.05s" }}>
+
+          <div
+            className="rise flex flex-col items-center relative z-10"
+            style={{ animationDelay: "0.05s" }}
+          >
             <div className="floaty inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em] text-primary shadow-sm mb-4">
               <span className="live-dot h-2 w-2 rounded-full bg-primary" />
               Sistem Monitoring Aktif 24/7
             </div>
-            
+
             <h1 className="mt-6 max-w-4xl font-display text-5xl font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-[5rem] sm:leading-[1.05]">
               Website kamu down? <br className="hidden sm:block" />
               <span className="text-gradient">Kamu tahu duluan.</span>
             </h1>
-            
+
             <p className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl font-medium">
               Pantau situs tiap menit. Dapatkan alert Telegram instan saat ada gangguan dan saat
-              pulih kembali. <strong className="text-foreground font-semibold">Tanpa delay, tanpa false alarm.</strong>
+              pulih kembali.{" "}
+              <strong className="text-foreground font-semibold">
+                Tanpa delay, tanpa false alarm.
+              </strong>
             </p>
-            
+
             <div className="mt-10 flex flex-wrap items-center justify-center gap-5">
               <Button
                 asChild
@@ -223,12 +229,12 @@ function Landing() {
                 </a>
               </Button>
             </div>
-            
+
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
               {[
                 { text: "1 Menit Setup", icon: Zap },
                 { text: "Tanpa Kartu Kredit", icon: ShieldCheck },
-                { text: "Bot Telegram Siap Pakai", icon: MessageSquare }
+                { text: "Bot Telegram Siap Pakai", icon: MessageSquare },
               ].map((item) => (
                 <span key={item.text} className="flex items-center gap-2">
                   <item.icon className="h-4 w-4 text-primary" />
@@ -331,7 +337,9 @@ function Landing() {
                   <span className="absolute -top-3 right-6 font-mono text-5xl font-black text-muted-foreground/10">
                     0{i + 1}
                   </span>
-                  <h3 className="mt-6 font-display text-xl font-bold text-foreground">{step.title}</h3>
+                  <h3 className="mt-6 font-display text-xl font-bold text-foreground">
+                    {step.title}
+                  </h3>
                   <p className="mt-3 text-base text-muted-foreground leading-relaxed">
                     {step.body}
                   </p>
@@ -394,7 +402,9 @@ function Landing() {
                     </span>
                   </div>
                   <div className="text-right">
-                    <p className="font-display text-5xl font-black text-foreground text-gradient">Rp0</p>
+                    <p className="font-display text-5xl font-black text-foreground text-gradient">
+                      Rp0
+                    </p>
                     <p className="text-sm font-bold text-muted-foreground mt-1">selamanya*</p>
                   </div>
                 </div>

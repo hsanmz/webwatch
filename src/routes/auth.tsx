@@ -71,7 +71,9 @@ function BrandPanel() {
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? "bg-primary" : "bg-red-400"}`}
                 />
-                <span className="flex-1 font-mono text-sm font-medium text-foreground">{row.host}</span>
+                <span className="flex-1 font-mono text-sm font-medium text-foreground">
+                  {row.host}
+                </span>
                 <span className="font-mono text-[11px] text-muted-foreground">{row.ms}</span>
               </li>
             ))}
@@ -115,7 +117,14 @@ function AuthPage() {
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const pollingRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const interval = window.setInterval(() => setResendIn((s) => s - 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [resendIn]);
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "same-origin" })
@@ -136,8 +145,20 @@ function AuthPage() {
       credentials: "same-origin",
       body: JSON.stringify({ email: emailValue }),
     });
-    const data = (await res.json()) as { status?: string; deepLink?: string; error?: string };
-    if (!res.ok || data.error) throw new Error(data.error ?? "Gagal mengirim kode");
+    const data = (await res.json()) as {
+      status?: string;
+      deepLink?: string;
+      error?: string;
+      retryAfter?: number;
+    };
+    if (!res.ok || data.error) {
+      if (data.error === "rate_limited") {
+        const wait = Math.max(1, data.retryAfter ?? 30);
+        setResendIn(wait);
+        throw new Error(`Terlalu cepat. Coba lagi dalam ${wait} detik.`);
+      }
+      throw new Error(data.error ?? "Gagal mengirim kode");
+    }
     return data;
   }, []);
 
@@ -339,10 +360,11 @@ function AuthPage() {
                 </Button>
                 <button
                   type="button"
-                  className="w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={resend}
+                  disabled={loading || resendIn > 0}
                 >
-                  Kirim ulang kode
+                  {resendIn > 0 ? `Kirim ulang (${resendIn}s)` : "Kirim ulang kode"}
                 </button>
               </form>
             )}

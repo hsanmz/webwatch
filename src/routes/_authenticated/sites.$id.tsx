@@ -238,7 +238,12 @@ function SiteDetail() {
                         borderRadius: 8,
                       }}
                     />
-                    <Bar dataKey="uptime" fill="var(--primary)" radius={[3, 3, 0, 0]} />
+                    <Bar
+                      dataKey="uptime"
+                      fill="var(--primary)"
+                      radius={[3, 3, 0, 0]}
+                      isAnimationActive={false}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -285,6 +290,7 @@ function SiteDetail() {
                       stroke="var(--primary)"
                       strokeWidth={2}
                       fill="url(#msFill)"
+                      isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

@@ -20,7 +20,9 @@ export function TelegramAlerts() {
           <p className="mt-1 text-sm leading-snug text-foreground">
             <span className="font-bold text-red-600">DOWN</span> — blog.tokoku.id
           </p>
-          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">timeout · 3x gagal</p>
+          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">
+            timeout · 3x gagal
+          </p>
         </div>
       </div>
 
@@ -38,7 +40,9 @@ export function TelegramAlerts() {
           <p className="mt-1 text-sm leading-snug text-foreground">
             <span className="font-bold text-teal-600">PULIH</span> — api.tokoku.id
           </p>
-          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">downtime 02:14</p>
+          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">
+            downtime 02:14
+          </p>
         </div>
       </div>
 
@@ -56,7 +60,9 @@ export function TelegramAlerts() {
           <p className="mt-1 text-sm leading-snug text-foreground">
             <span className="font-bold text-amber-600">SSL</span> — sertifikat toko.id
           </p>
-          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">habis dalam 7 hari</p>
+          <p className="mt-1 font-mono text-[10px] font-medium text-muted-foreground">
+            habis dalam 7 hari
+          </p>
         </div>
       </div>
     </div>

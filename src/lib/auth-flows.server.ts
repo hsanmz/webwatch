@@ -105,7 +105,7 @@ export async function verifyOtpLogin(request: Request): Promise<Response> {
 
 export async function currentUser(request: Request): Promise<Response> {
   const user = await requireUser(request);
-  if (!user) return json({ user: null }, 401);
+  if (!user) return json({ user: null });
   return json({
     user: { id: user.id, email: user.email, chat_id: user.chat_id, tg_username: user.tg_username },
   });
