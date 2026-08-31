@@ -64,6 +64,18 @@ type IncidentRow = {
   error_message: string | null;
 };
 
+type ApmEventRow = {
+  id: string;
+  environment: string;
+  event_type: string;
+  message: string;
+  stack_trace: string | null;
+  url: string | null;
+  method: string | null;
+  user_agent: string | null;
+  created_at: string;
+};
+
 type Detail = { site: SiteRow; checks: CheckRow[]; incidents: IncidentRow[] };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -84,6 +96,33 @@ function SiteDetail() {
   const detail = useQuery({
     queryKey: ["site-detail", id],
     queryFn: () => api<Detail>(`/api/sites/detail?id=${encodeURIComponent(id)}`),
+  });
+
+  const apiKeys = useQuery({
+    queryKey: ["site-keys", id],
+    queryFn: () =>
+      api<{ keys: { key: string; name: string; created_at: string }[] }>(
+        `/api/sites/keys?siteId=${encodeURIComponent(id)}`,
+      ),
+  });
+
+  const apmEvents = useQuery({
+    queryKey: ["site-events", id],
+    queryFn: () =>
+      api<{ events: ApmEventRow[] }>(`/api/sites/events?siteId=${encodeURIComponent(id)}`),
+  });
+
+  const createApiKey = useMutation({
+    mutationFn: async (name: string) =>
+      api<{ ok: boolean; key: string }>("/api/sites/keys", {
+        method: "POST",
+        body: JSON.stringify({ siteId: id, name }),
+      }),
+    onSuccess: () => {
+      toast.success("API Key berhasil dibuat");
+      queryClient.invalidateQueries({ queryKey: ["site-keys", id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const [intervalMinutes, setIntervalMinutes] = useState("5");
@@ -348,6 +387,93 @@ function SiteDetail() {
                 Simpan
               </Button>
             </form>
+          </section>
+
+          <section className="panel p-5">
+            <h2 className="font-display text-base font-semibold">Integrasi APM & Error Tracking</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Gunakan API Key ini di SDK WebWatch untuk mengirim log dan error dari aplikasimu.
+            </p>
+            <div className="mt-4 space-y-4">
+              <ul className="space-y-3">
+                {apiKeys.data?.keys.length === 0 && (
+                  <li className="text-sm text-muted-foreground">Belum ada API Key.</li>
+                )}
+                {apiKeys.data?.keys.map((k) => (
+                  <li
+                    key={k.key}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">{k.name}</p>
+                      <p className="mt-1 font-mono text-xs text-muted-foreground select-all">
+                        {k.key}
+                      </p>
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {new Date(k.created_at).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                onClick={() => {
+                  const name = prompt("Nama API Key:");
+                  if (name) createApiKey.mutate(name);
+                }}
+                disabled={createApiKey.isPending}
+              >
+                {createApiKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Buat API Key Baru
+              </Button>
+            </div>
+          </section>
+
+          <section className="panel p-5">
+            <h2 className="font-display text-base font-semibold">APM & Error Logs</h2>
+            <div className="mt-4">
+              <ul className="space-y-3">
+                {apmEvents.isLoading && (
+                  <li className="text-sm text-muted-foreground">Memuat...</li>
+                )}
+                {apmEvents.data?.events.length === 0 && (
+                  <li className="text-sm text-muted-foreground">Belum ada error atau log.</li>
+                )}
+                {apmEvents.data?.events.map((ev) => (
+                  <li
+                    key={ev.id}
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-widest ${ev.event_type.includes("error") ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-primary/10 text-primary border border-primary/20"}`}
+                        >
+                          {ev.event_type}
+                        </span>
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {ev.environment}
+                        </span>
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(ev.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold">{ev.message}</p>
+                    {(ev.method || ev.url) && (
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {ev.method} {ev.url}
+                      </p>
+                    )}
+                    {ev.stack_trace && (
+                      <pre className="mt-2 w-full overflow-x-auto rounded-md bg-muted p-2 font-mono text-[10px] text-muted-foreground">
+                        {ev.stack_trace}
+                      </pre>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
 
           <section className="panel p-5">

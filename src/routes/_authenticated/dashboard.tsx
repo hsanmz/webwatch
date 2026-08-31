@@ -2,7 +2,17 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pause, Play, Plus, Trash2, Activity, Clock, Server } from "lucide-react";
+import {
+  Loader2,
+  Pause,
+  Play,
+  Plus,
+  Trash2,
+  Activity,
+  Clock,
+  Server,
+  BookOpen,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +41,8 @@ type Site = {
   is_active: boolean;
   current_status: string;
   last_checked_at: string | null;
+  verification_token: string | null;
+  verification_status: string;
 };
 
 type Me = {
@@ -100,7 +112,10 @@ function Dashboard() {
 
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: () => api<Me>("/api/auth/me"),
+    queryFn: async () => {
+      const data = await api<{ user: Me }>("/api/auth/me");
+      return data.user;
+    },
     retry: false,
   });
 
@@ -135,6 +150,27 @@ function Dashboard() {
         body: JSON.stringify({ id: site.id, is_active: !site.is_active }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sites"] }),
+  });
+
+  const verifySite = useMutation({
+    mutationFn: async (id: string) =>
+      api<{ ok: boolean; status?: string }>("/api/sites/verify", {
+        method: "POST",
+        body: JSON.stringify({ id }),
+      }),
+    onSuccess: (data) => {
+      toast.success("Verifikasi berhasil!");
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    },
+    onError: (error: Error) => {
+      toast.error(
+        error.message === "token_mismatch"
+          ? "Token tidak sesuai"
+          : error.message === "file_not_found"
+            ? "File webwatch-verify.txt tidak ditemukan"
+            : error.message,
+      );
+    },
   });
 
   const removeSite = useMutation({
@@ -173,6 +209,13 @@ function Dashboard() {
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden items-center gap-2 md:flex">
+              <Link
+                to="/docs"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors mr-4 font-medium flex items-center gap-1.5"
+              >
+                <BookOpen className="h-4 w-4" />
+                Dokumentasi SDK
+              </Link>
               <span
                 className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest border ${
                   connected
@@ -367,11 +410,65 @@ function Dashboard() {
                 </div>
 
                 <div className="mt-6 flex items-center justify-between border-t border-border/60 pt-4">
-                  <Button asChild variant="secondary" size="sm" className="h-8 text-xs font-medium">
-                    <Link to="/sites/$id" params={{ id: site.id }}>
-                      Lihat Metrik
-                    </Link>
-                  </Button>
+                  {site.verification_status === "pending" ? (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs font-medium border-amber-500/50 text-amber-500 hover:bg-amber-500/10"
+                        >
+                          Verifikasi Domain
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Verifikasi Kepemilikan Domain</DialogTitle>
+                          <DialogDescription>
+                            Untuk memantau dan mendapatkan metrik APM, buktikan bahwa kamu pemilik{" "}
+                            {site.url}.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <p className="text-sm">
+                            1. Buat file bernama{" "}
+                            <code className="bg-muted px-1 py-0.5 rounded">
+                              webwatch-verify.txt
+                            </code>{" "}
+                            di root website kamu (agar bisa diakses di {site.url}
+                            /webwatch-verify.txt).
+                          </p>
+                          <p className="text-sm">2. Isi file tersebut dengan kode unik ini:</p>
+                          <div className="bg-muted p-3 rounded-lg font-mono text-sm break-all select-all">
+                            {site.verification_token}
+                          </div>
+                          <p className="text-sm">
+                            3. Setelah file di-upload, klik tombol verifikasi di bawah.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => verifySite.mutate(site.id)}
+                          disabled={verifySite.isPending}
+                        >
+                          {verifySite.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Verifikasi Sekarang
+                        </Button>
+                      </DialogContent>
+                    </Dialog>
+                  ) : (
+                    <Button
+                      asChild
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 text-xs font-medium"
+                    >
+                      <Link to="/sites/$id" params={{ id: site.id }}>
+                        Lihat Metrik
+                      </Link>
+                    </Button>
+                  )}
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"

@@ -26,6 +26,8 @@ type SiteRow = {
   is_active: boolean;
   current_status: string;
   last_checked_at: string | null;
+  verification_token: string | null;
+  verification_status: string;
 };
 
 type SiteDbRow = {
@@ -39,6 +41,8 @@ type SiteDbRow = {
   is_active: number;
   current_status: string;
   last_checked_at: string | null;
+  verification_token: string | null;
+  verification_status: string;
 };
 
 function mapSite(row: SiteDbRow): SiteRow {
@@ -53,6 +57,8 @@ function mapSite(row: SiteDbRow): SiteRow {
     is_active: toBool(row.is_active),
     current_status: row.current_status,
     last_checked_at: row.last_checked_at,
+    verification_token: row.verification_token,
+    verification_status: row.verification_status,
   };
 }
 
@@ -81,7 +87,7 @@ export async function listSites(request: Request): Promise<Response> {
   const { results } = await db()
     .prepare(
       `SELECT id, name, url, interval_seconds, fail_threshold, check_keyword, check_ssl,
-              is_active, current_status, last_checked_at
+              is_active, current_status, last_checked_at, verification_token, verification_status
        FROM sites WHERE user_id = ? ORDER BY created_at ASC`,
     )
     .bind(user.id)
@@ -131,11 +137,12 @@ export async function createSite(request: Request): Promise<Response> {
   if (taken) return json({ error: "url_taken" }, 409);
 
   const id = newId();
+  const token = newId();
   try {
     await db()
       .prepare(
-        `INSERT INTO sites (id, user_id, url, name, interval_seconds, fail_threshold, check_keyword, check_ssl)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sites (id, user_id, url, name, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       )
       .bind(
         id,
@@ -146,6 +153,7 @@ export async function createSite(request: Request): Promise<Response> {
         clampInt(body.failThreshold, 2, 1, 100),
         typeof body.keyword === "string" && body.keyword.trim() ? body.keyword.trim() : null,
         body.ssl === true ? 1 : 0,
+        token,
       )
       .run();
   } catch {
@@ -247,7 +255,7 @@ export async function siteDetail(request: Request): Promise<Response> {
 
   const site = await db()
     .prepare(
-      `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl
+      `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status
        FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
     )
     .bind(id, user.id)
@@ -292,4 +300,53 @@ export async function siteDetail(request: Request): Promise<Response> {
     }>();
 
   return json({ site: mapSite(site), checks, incidents: incidents ?? [] });
+}
+
+export async function verifySite(request: Request): Promise<Response> {
+  const denied = await userFor(request);
+  if (denied) return denied;
+  const user = (await requireUser(request))!;
+
+  let body: { id?: unknown };
+  try {
+    body = (await request.json()) as { id?: unknown };
+  } catch {
+    return json({ error: "invalid_request" }, 400);
+  }
+  const id = typeof body.id === "string" ? body.id : "";
+  if (!id) return json({ error: "id_required" }, 400);
+
+  const site = await db()
+    .prepare(
+      "SELECT url, verification_token, verification_status FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
+    )
+    .bind(id, user.id)
+    .first<{ url: string; verification_token: string | null; verification_status: string }>();
+
+  if (!site) return json({ error: "not_found" }, 404);
+  if (site.verification_status === "verified") return json({ ok: true, status: "verified" });
+  if (!site.verification_token) return json({ error: "no_token" }, 400);
+
+  try {
+    const checkUrl = new URL("/webwatch-verify.txt", site.url).toString();
+    const res = await fetch(checkUrl, {
+      method: "GET",
+      headers: { "User-Agent": "WebWatch-Verifier/1.0" },
+    });
+    if (!res.ok) {
+      return json({ ok: false, error: "file_not_found" });
+    }
+    const text = await res.text();
+    if (text.includes(site.verification_token)) {
+      await db()
+        .prepare("UPDATE sites SET verification_status = 'verified' WHERE id = ?")
+        .bind(id)
+        .run();
+      return json({ ok: true, status: "verified" });
+    } else {
+      return json({ ok: false, error: "token_mismatch" });
+    }
+  } catch (e) {
+    return json({ ok: false, error: "network_error" });
+  }
 }

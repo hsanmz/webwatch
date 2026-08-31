@@ -106,3 +106,21 @@ export function formatOtpMessage(email: string, code: string) {
     `Email: ${escapeHtml(email)}`,
   ].join("\n");
 }
+
+export function formatApmErrorMessage(input: {
+  label: string;
+  url: string;
+  environment: string;
+  eventType: string;
+  message: string;
+  endpoint: string;
+}) {
+  return [
+    `🚨 <b>APM ALERT</b> — ${escapeHtml(input.label)}`,
+    `<code>${escapeHtml(input.url)}</code>`,
+    ``,
+    `Tipe: <b>${escapeHtml(input.eventType)}</b> (${escapeHtml(input.environment)})`,
+    `Pesan: ${escapeHtml(input.message)}`,
+    `Endpoint: ${escapeHtml(input.endpoint)}`,
+  ].join("\n");
+}

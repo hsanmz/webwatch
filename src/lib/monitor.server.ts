@@ -321,7 +321,7 @@ export async function runDueChecks() {
               current_status, consecutive_failures, last_checked_at, last_notified_at, ssl_last_warned_at
        FROM sites
        WHERE is_active = 1
-       ORDER BY last_checked_at IS NULL DESC, last_checked_at ASC
+       ORDER BY last_checked_at ASC
        LIMIT ?`,
     )
     .bind(MAX_SITES_PER_RUN)
