@@ -4,26 +4,26 @@ WebWatch adalah aplikasi monitoring uptime website multi-user dengan notifikasi 
 
 ## Fitur
 
-- **Pemantauan otomatis** — interval mulai 1 menit, timeout 10 detik, HTTP request dilakukan jarak jauh.
+- **Pemantauan otomatis** — interval mulai 1 menit, timeout 10 detik, HTTP request dilakukan jarak jauh (Cloudflare Cron Trigger).
+- **Login OTP via Telegram** — tanpa password; kode 6 digit dikirim bot Telegram ke chat yang terhubung.
 - **Alert Telegram real-time** — notifikasi DOWN dan RECOVERED ke chat Telegram pemilik situs, lengkap dengan penyebab dan durasi downtime.
 - **Anti false alarm** — threshold kegagalan berturut-turut + cooldown 10 menit.
 - **Keyword check** — deteksi "soft down" (status 200 tapi halaman error/maintenance).
 - **Cek SSL & masa berlaku** — peringatan sertifikat mendekati kedaluwarsa (< 7 hari) atau sudah kadaluarsa.
 - **Riwayat & statistik** — uptime % 24 jam / 7 hari / 30 hari, grafik response time, daftar insiden.
 - **Retensi otomatis** — data riwayat diputar (rolling) 30 hari terakhir.
-- **Multi-user** — isolasi data per user (RLS), siapa pun bisa daftar dan memantau situsnya sendiri.
+- **Multi-user** — isolasi data per user, siapa pun bisa masuk dan memantau situsnya sendiri.
 
 ## Tech stack
 
-| Lapisan | Teknologi |
-| --- | --- |
-| Frontend / SSR | TanStack Start (React + TanStack Router + TanStack Query) |
-| Backend API | Endpoint API TanStack Start + bot Telegram mode webhook |
-| Database & Auth | Supabase (Postgres + Auth + RLS + pg_cron) |
-| Hosting | Cloudflare Workers/Pages via Nitro (preset `cloudflare-module`) |
-| Tooling | Bun, TypeScript, Vite, Vitest, Tailwind CSS |
-
-Catatan: desain awal di SRS memakai Cloudflare Workers + D1 + Hono. Implementasi saat ini menjalankan logika monitoring di sisi server TanStack Start dengan Supabase sebagai datastore — logika murni dipisahkan dari platform (`src/lib/monitor-core.ts`) sehingga mudah dimigrasi.
+| Lapisan         | Teknologi                                                  |
+| --------------- | ---------------------------------------------------------- |
+| Frontend / SSR  | TanStack Start (React + TanStack Router + TanStack Query)  |
+| Backend API     | Endpoint API TanStack Start + bot Telegram mode webhook    |
+| Database & Auth | Cloudflare D1 (SQLite) — session cookie + OTP via Telegram |
+| Scheduler       | Cloudflare Cron Trigger (`* * * * *`)                      |
+| Hosting         | Cloudflare Workers via Nitro (preset `cloudflare-module`)  |
+| Tooling         | Bun, TypeScript, Vite, Vitest, Tailwind CSS                |
 
 ## Arsitektur singkat
 
@@ -31,44 +31,52 @@ Catatan: desain awal di SRS memakai Cloudflare Workers + D1 + Hono. Implementasi
 src/
 ├── routes/
 │   ├── index.tsx                  # Landing page
-│   ├── auth.tsx                   # Login / daftar
+│   ├── auth.tsx                   # Login OTP via Telegram (email → link bot → kode)
 │   ├── _authenticated/
-│   │   ├── dashboard.tsx          # Kelola situs + link Telegram
+│   │   ├── route.tsx              # Guard: cek session cookie
+│   │   ├── dashboard.tsx          # Kelola situs + status Telegram
 │   │   └── sites.$id.tsx          # Detail situs: grafik, riwayat, edit
 │   └── api/
-│       └── public/telegram/webhook.ts  # Webhook bot Telegram
+│       ├── auth/{otp,link-status,verify,me,logout}.ts
+│       ├── sites.ts / sites/detail.ts   # CRUD situs (auth cookie)
+│       └── public/
+│           ├── telegram/webhook.ts      # Webhook bot Telegram
+│           └── cron/run.ts              # Trigger manual monitor (rahasia)
 ├── lib/
-│   ├── monitor-core.ts            # Logika murni: evaluasi status, cooldown, SSL (gampang dites)
-│   ├── monitor.server.ts          # Engine monitoring + notifikasi
-│   ├── telegram.server.ts         # Formatter pesan + kirim via Bot API
-│   └── bots.ts / bot.server.ts    # Handler command bot Telegram
-├── integrations/supabase/         # Client, RLS helper, cron auth
+│   ├── monitor-core.ts            # Logika murni: evaluasi status, cooldown, SSL (dites)
+│   ├── monitor.server.ts          # Engine monitoring + notifikasi (D1)
+│   ├── bot.server.ts              # Handler command bot Telegram (D1)
+│   ├── auth.server.ts             # OTP, session, cookie, hash
+│   ├── auth-flows.server.ts       # Handler endpoint auth
+│   ├── sites-api.server.ts        # CRUD situs
+│   ├── wrangler-env.ts            # Akses binding (env.DB) dari route handler
+│   ├── monitor-cron.ts            # Daftarkan monitor ke event `scheduled` CF
+│   └── telegram.server.ts         # Formatter pesan + kirim via Bot API
+├── types/d1.d.ts                  # Tipe ambien D1
 └── components/                    # UI + blok marketing
 ```
 
-Scheduler update situs diimplementasikan sebagai job pg_cron di Supabase yang memanggil endpoint pemantauan (lihat `supabase/`).
+Scheduler memakai worker mungil `scheduler-worker/` (Cloudflare Cron Trigger tiap menit) yang memanggil endpoint drainase main worker lewat Service Binding — karena preset `cloudflare-module` membungkus worker sehingga event `scheduled` milik kode kita sendiri tidak bisa dipakai langsung di worker utama.
+
+## Database (D1)
+
+Migrasi D1 ada di `migrations/d1/`:
+
+```sh
+bunx wrangler d1 migrations apply webwatch --remote
+```
 
 ## Environment variables
 
+Variabel di atas hanya dibutuhkan server-side (set sebagai **secret** di Cloudflare):
+
 ```
-# Supabase — client
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_KEY=
-
-# Supabase — server (SSR & engine)
-SUPABASE_URL=
-SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# Telegram bot
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_BOT_USERNAME=
-TELEGRAM_WEBHOOK_SECRET=
-
-# Cron / Lovable
-LOVABLE_CRON_SECRET=
-LOVABLE_CRON_SECRET_PREVIOUS=
+TELEGRAM_BOT_TOKEN=        # secret
+TELEGRAM_BOT_USERNAME=     # secret/var (username bot tanpa @)
+TELEGRAM_WEBHOOK_SECRET=   # secret (juga melindungi endpoint cron manual)
 ```
+
+`.env` lokal cukup untuk development; jangan commit token asli.
 
 ## Development
 
@@ -81,10 +89,18 @@ bun i
 bun run dev
 ```
 
+Untuk menjalankan worker + D1 secara lokal:
+
+```sh
+bun run build
+bunx wrangler d1 migrations apply webwatch --local
+bunx wrangler dev
+```
+
 ## Script yang tersedia
 
 ```sh
-bun run dev          # dev server (sering pakai --host untuk akses dari HP)
+bun run dev          # dev server
 bun run build        # produksi build (Nitro, output cloudflare-module)
 bun run preview      # pratinjau hasil build
 bun run test         # vitest (unit test logika monitoring & formatter pesan)
@@ -92,9 +108,30 @@ bunx tsc --noEmit    # typecheck
 bun run lint         # eslint
 ```
 
-## Database
+## Deployment
 
-Migrasi ada di `supabase/migrations/` (format `YYYYMMDDHHMMSS_nama.sql`). Migrasi yang sudah ada, termasuk SSL check, dijalankan otomatis oleh Lovable/Supabase saat terhubung — pastikan migrasi terbaru sudah ter-apply sebelum mengaktifkan fitur SSL dari dashboard.
+```sh
+bunx wrangler d1 migrations apply webwatch --remote   # migrasi schema D1
+bun run build                                         # build fullstack Worker
+bunx wrangler secret put TELEGRAM_BOT_TOKEN            # secret dulu (sekali)
+bunx wrangler deploy                                  # deploy main worker
+bunx wrangler deploy --config scheduler-worker/wrangler.jsonc  # deploy scheduler
+```
+
+Setelah deploy, daftarkan webhook Telegram:
+
+```sh
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put TELEGRAM_BOT_USERNAME
+wrangler secret put TELEGRAM_WEBHOOK_SECRET
+wrangler deploy
+
+# lalu daftarkan webhook (token dari secret TELEGRAM_BOT_TOKEN).
+# Gunakan --data-urlencode; tambah ip_address jika resolver Telegram gagal resolve host workers.dev:
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+  --data-urlencode "url=https://webwatch.hugoedmoundo.workers.dev/api/public/telegram/webhook" \
+  --data-urlencode "secret_token=<WEBHOOK_SECRET>"
+```
 
 ## Testing
 
@@ -109,10 +146,17 @@ Unit test mencakup logika murni di `src/lib/`:
 bun run test
 ```
 
+## Alur login OTP
+
+1. User memasukkan email → server mengecek apakah email sudah terhubung dengan chat Telegram.
+2. Belum terhubung → halaman menampilkan link `/start <token>` ke bot; saat bot ditekan, chat terhubung ke email.
+3. Server mengirim kode 6 digit ke chat Telegram (berlaku 5 menit, sekali pakai).
+4. User memasukkan kode → server membuat session (cookie `HttpOnly`) → masuk ke dashboard.
+
 ## Roadmap
 
-- Fase 1 (selesai): auth, kelola situs, monitoring dasar, notifikasi down/recovered, linking Telegram.
-- Fase 2 (selesai): dashboard statistik, keyword check, SSL check, anti-flapping, grafik 24h/7d/30d.
+- Fase 1 (selesai): auth OTP, kelola situs, monitoring dasar, notifikasi down/recovered.
+- Fase 2 (selesai): dashboard statistik, keyword check, SSL check, anti-flapping, grafik 24h/7d/30d, migrasi Supabase → D1.
 - Fase 3 (opsional): channel notifikasi tambahan, status page publik, multi-region check.
 
 ---

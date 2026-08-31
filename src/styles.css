@@ -62,43 +62,6 @@
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.17 0.018 250);
-  --foreground: oklch(0.95 0.008 250);
-  --surface: oklch(0.21 0.02 252);
-  --surface-foreground: oklch(0.95 0.008 250);
-  --card: oklch(0.212 0.02 252);
-  --card-foreground: oklch(0.95 0.008 250);
-  --popover: oklch(0.212 0.02 252);
-  --popover-foreground: oklch(0.95 0.008 250);
-  --primary: oklch(0.76 0.13 178);
-  --primary-foreground: oklch(0.11 0.03 178);
-  --secondary: oklch(0.27 0.022 252);
-  --secondary-foreground: oklch(0.93 0.008 250);
-  --muted: oklch(0.25 0.02 252);
-  --muted-foreground: oklch(0.68 0.018 250);
-  --accent: oklch(0.32 0.03 178);
-  --accent-foreground: oklch(0.95 0.01 178);
-  --destructive: oklch(0.62 0.21 22);
-  --destructive-foreground: oklch(0.97 0.01 22);
-  --up: oklch(0.76 0.13 178);
-  --down: oklch(0.65 0.21 22);
-  --paused: oklch(0.8 0.15 85);
-  --border: oklch(0.3 0.02 252);
-  --input: oklch(0.3 0.02 252);
-  --ring: oklch(0.76 0.13 178);
-}
-
-.dark {
-  --background: oklch(0.17 0.018 250);
-  --foreground: oklch(0.95 0.008 250);
-}
-
-/*
- * Marketing pages (landing + auth): bright surfaces, black ink, toska accent —
- * mirrors the logo (hitam + hijau toska). Scope tokens to the subtree so the
- * dark "ops console" dashboard is untouched.
- */
-.marketing {
   --background: oklch(0.982 0.006 250);
   --foreground: oklch(0.185 0.02 250);
   --surface: oklch(0.955 0.008 250);
@@ -115,12 +78,66 @@
   --muted-foreground: oklch(0.455 0.02 250);
   --accent: oklch(0.945 0.02 178);
   --accent-foreground: oklch(0.26 0.02 250);
+  --destructive: oklch(0.62 0.21 22);
+  --destructive-foreground: oklch(0.98 0.01 22);
   --up: oklch(0.56 0.13 178);
   --down: oklch(0.62 0.21 22);
   --paused: oklch(0.7 0.15 85);
   --border: oklch(0.905 0.012 250);
   --input: oklch(0.905 0.012 250);
   --ring: oklch(0.58 0.12 178);
+}
+
+/*
+ * Marketing pages (landing + auth): bright surfaces, black ink, toska accent —
+ * mirrors the logo (hitam + hijau toska). Scope tokens to the subtree so the
+ * dark "ops console" dashboard is untouched.
+ */
+.marketing {
+  --background: oklch(0.982 0.006 250);
+  --color-background: var(--background);
+  --foreground: oklch(0.185 0.02 250);
+  --color-foreground: var(--foreground);
+  --surface: oklch(0.955 0.008 250);
+  --color-surface: var(--surface);
+  --surface-foreground: oklch(0.185 0.02 250);
+  --color-surface-foreground: var(--surface-foreground);
+  --card: oklch(1 0 0);
+  --color-card: var(--card);
+  --card-foreground: oklch(0.185 0.02 250);
+  --color-card-foreground: var(--card-foreground);
+  --popover: oklch(1 0 0);
+  --color-popover: var(--popover);
+  --popover-foreground: oklch(0.185 0.02 250);
+  --color-popover-foreground: var(--popover-foreground);
+  --primary: oklch(0.58 0.12 178);
+  --color-primary: var(--primary);
+  --primary-foreground: oklch(0.98 0.01 178);
+  --color-primary-foreground: var(--primary-foreground);
+  --secondary: oklch(0.945 0.012 178);
+  --color-secondary: var(--secondary);
+  --secondary-foreground: oklch(0.26 0.02 250);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --muted: oklch(0.952 0.008 250);
+  --color-muted: var(--muted);
+  --muted-foreground: oklch(0.455 0.02 250);
+  --color-muted-foreground: var(--muted-foreground);
+  --accent: oklch(0.945 0.02 178);
+  --color-accent: var(--accent);
+  --accent-foreground: oklch(0.26 0.02 250);
+  --color-accent-foreground: var(--accent-foreground);
+  --up: oklch(0.56 0.13 178);
+  --color-up: var(--up);
+  --down: oklch(0.62 0.21 22);
+  --color-down: var(--down);
+  --paused: oklch(0.7 0.15 85);
+  --color-paused: var(--paused);
+  --border: oklch(0.905 0.012 250);
+  --color-border: var(--border);
+  --input: oklch(0.905 0.012 250);
+  --color-input: var(--input);
+  --ring: oklch(0.58 0.12 178);
+  --color-ring: var(--ring);
   --shadow-panel: 0 24px 60px -36px oklch(0.16 0.02 250 / 0.28);
   --shadow-glow: 0 0 0 1px var(--border), 0 18px 50px -20px oklch(0.56 0.12 178 / 0.4);
 
@@ -163,8 +180,8 @@
 }
 
 @utility panel {
-  background-color: var(--color-card);
-  border: 1px solid var(--color-border);
+  background-color: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-panel);
 }
@@ -177,9 +194,9 @@
 }
 
 @utility glass {
-  background-color: color-mix(in oklab, var(--color-card) 70%, transparent);
+  background-color: color-mix(in oklab, var(--card) 70%, transparent);
   backdrop-filter: blur(14px);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
 }
 
 @utility text-gradient {
@@ -257,6 +274,31 @@
 
 @utility rise {
   animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility marquee-mask {
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+@utility reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

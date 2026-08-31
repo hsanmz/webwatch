@@ -1,0 +1,17 @@
+{
+  "name": "webwatch-scheduler",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-31",
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
+  "vars": {
+    "TARGET_URL": "https://webwatch/api/public/cron/run",
+  },
+  "services": [
+    {
+      "binding": "MAIN",
+      "service": "webwatch",
+    },
+  ],
+}

@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { db, type AppEnv } from "./wrangler-env";
+import { newId } from "./auth.server";
 import {
   formatDownMessage,
   formatRecoveryMessage,
@@ -12,7 +13,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const NOTIFY_COOLDOWN_MS = 10 * 60 * 1000; // anti-flapping
 const SSL_WARN_THRESHOLD_DAYS = 7;
 const SSL_WARN_REPEAT_MS = 24 * 60 * 60 * 1000; // peringatan max 1x per hari per situs
-const MAX_SITES_PER_RUN = 60;
+const MAX_SITES_PER_RUN = 200;
 
 export type ProbeResult = {
   isUp: boolean;
@@ -120,15 +121,23 @@ async function checkSslExpiry(rawUrl: string): Promise<number | null> {
 }
 
 async function chatIdFor(userId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from("telegram_accounts")
-    .select("chat_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data?.chat_id ?? null;
+  const row = await db()
+    .prepare("SELECT chat_id FROM users WHERE id = ? LIMIT 1")
+    .bind(userId)
+    .first<{ chat_id: string | null }>();
+  return row?.chat_id ?? null;
 }
 
-type SiteRow = {
+function toBool(value: unknown): boolean {
+  return value === 1 || value === true || value === "1";
+}
+
+function toInt(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number.parseInt(String(value));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export type SiteRow = {
   id: string;
   user_id: string;
   name: string | null;
@@ -143,6 +152,32 @@ type SiteRow = {
   last_notified_at: string | null;
   ssl_last_warned_at: string | null;
 };
+
+type SiteDbRow = {
+  id: string;
+  user_id: string;
+  name: string | null;
+  url: string;
+  interval_seconds: number;
+  fail_threshold: number;
+  check_keyword: string | null;
+  check_ssl: number;
+  current_status: string;
+  consecutive_failures: number;
+  last_checked_at: string | null;
+  last_notified_at: string | null;
+  ssl_last_warned_at: string | null;
+};
+
+function mapSite(row: SiteDbRow): SiteRow {
+  return {
+    ...row,
+    check_ssl: toBool(row.check_ssl),
+    interval_seconds: toInt(row.interval_seconds, 300),
+    fail_threshold: toInt(row.fail_threshold, 2),
+    consecutive_failures: toInt(row.consecutive_failures, 0),
+  };
+}
 
 export async function checkSite(site: SiteRow) {
   const result = await probe(site.url, site.check_keyword);
@@ -162,13 +197,12 @@ export async function checkSite(site: SiteRow) {
     }
   }
 
-  await supabaseAdmin.from("checks").insert({
-    site_id: site.id,
-    status_code: result.statusCode,
-    response_time_ms: result.responseTimeMs,
-    is_up: isUp,
-    error_message: errorMessage,
-  });
+  await db()
+    .prepare(
+      "INSERT INTO checks (id, site_id, status_code, response_time_ms, is_up, error_message) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(newId(), site.id, result.statusCode, result.responseTimeMs, isUp ? 1 : 0, errorMessage)
+    .run();
 
   const evaluation = evaluateStatus({
     currentStatus: site.current_status,
@@ -182,10 +216,10 @@ export async function checkSite(site: SiteRow) {
   let sslWarned = false;
 
   if (evaluation.becameDown) {
-    await supabaseAdmin.from("incidents").insert({
-      site_id: site.id,
-      error_message: errorMessage,
-    });
+    await db()
+      .prepare("INSERT INTO incidents (id, site_id, error_message) VALUES (?, ?, ?)")
+      .bind(newId(), site.id, errorMessage)
+      .run();
     if (!cooldownActive) {
       const chatId = await chatIdFor(site.user_id);
       if (chatId) {
@@ -203,22 +237,20 @@ export async function checkSite(site: SiteRow) {
       }
     }
   } else if (evaluation.becameUp) {
-    const { data: incident } = await supabaseAdmin
-      .from("incidents")
-      .select("id, started_at")
-      .eq("site_id", site.id)
-      .is("resolved_at", null)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const incident = await db()
+      .prepare(
+        "SELECT id, started_at FROM incidents WHERE site_id = ? AND resolved_at IS NULL ORDER BY started_at DESC LIMIT 1",
+      )
+      .bind(site.id)
+      .first<{ id: string; started_at: string }>();
 
     let downtime = "tidak diketahui";
     if (incident) {
       downtime = humanDuration(nowMs - new Date(incident.started_at).getTime());
-      await supabaseAdmin
-        .from("incidents")
-        .update({ resolved_at: now.toISOString() })
-        .eq("id", incident.id);
+      await db()
+        .prepare("UPDATE incidents SET resolved_at = ? WHERE id = ?")
+        .bind(now.toISOString(), incident.id)
+        .run();
     }
 
     if (!cooldownActive) {
@@ -259,55 +291,83 @@ export async function checkSite(site: SiteRow) {
     }
   }
 
-  await supabaseAdmin
-    .from("sites")
-    .update({
-      current_status: evaluation.status,
-      consecutive_failures: evaluation.consecutiveFailures,
-      last_checked_at: now.toISOString(),
-      ...(notified ? { last_notified_at: now.toISOString() } : {}),
-      ...(sslWarned ? { ssl_last_warned_at: now.toISOString() } : {}),
-    })
-    .eq("id", site.id);
+  await db()
+    .prepare(
+      `UPDATE sites SET
+        current_status = ?,
+        consecutive_failures = ?,
+        last_checked_at = ?,
+        last_notified_at = COALESCE(?, last_notified_at),
+        ssl_last_warned_at = COALESCE(?, ssl_last_warned_at)
+       WHERE id = ?`,
+    )
+    .bind(
+      evaluation.status,
+      evaluation.consecutiveFailures,
+      now.toISOString(),
+      notified ? now.toISOString() : null,
+      sslWarned ? now.toISOString() : null,
+      site.id,
+    )
+    .run();
 
   return { siteId: site.id, up: isUp, status: evaluation.status };
 }
 
 export async function runDueChecks() {
-  const { data: sites, error } = await supabaseAdmin
-    .from("sites")
-    .select(
-      "id,user_id,name,url,interval_seconds,fail_threshold,check_keyword,check_ssl,current_status,consecutive_failures,last_checked_at,last_notified_at,ssl_last_warned_at",
+  const { results } = await db()
+    .prepare(
+      `SELECT id, user_id, name, url, interval_seconds, fail_threshold, check_keyword, check_ssl,
+              current_status, consecutive_failures, last_checked_at, last_notified_at, ssl_last_warned_at
+       FROM sites
+       WHERE is_active = 1
+       ORDER BY last_checked_at IS NULL DESC, last_checked_at ASC
+       LIMIT ?`,
     )
-    .eq("is_active", true)
-    .order("last_checked_at", { ascending: true, nullsFirst: true })
-    .limit(MAX_SITES_PER_RUN);
-
-  if (error) throw error;
+    .bind(MAX_SITES_PER_RUN)
+    .all<SiteDbRow>();
 
   const now = Date.now();
-  const due = (sites ?? []).filter((site) => {
-    if (!site.last_checked_at) return true;
-    return now - new Date(site.last_checked_at).getTime() >= site.interval_seconds * 1000;
-  });
+  const due = (results ?? [])
+    .filter((site) => {
+      if (!site.last_checked_at) return true;
+      return now - new Date(site.last_checked_at).getTime() >= site.interval_seconds * 1000;
+    })
+    .map(mapSite);
 
-  const results = [];
-  for (const site of due) {
-    try {
-      results.push(await checkSite(site as SiteRow));
-    } catch (err) {
-      console.error(`[monitor] check failed for ${site.id}`, err);
-    }
-  }
-  return results;
+  const checkedResults = await Promise.all(
+    due.map((site) =>
+      checkSite(site).catch((err) => {
+        console.error(`[monitor] check failed for ${site.id}`, err);
+        return null;
+      }),
+    ),
+  );
+
+  const checked = checkedResults.filter((c) => c !== null);
+  return checked;
 }
 
 export async function purgeOldData() {
   const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  await supabaseAdmin.from("checks").delete().lt("checked_at", cutoff);
-  await supabaseAdmin
-    .from("incidents")
-    .delete()
-    .lt("started_at", cutoff)
-    .not("resolved_at", "is", null);
+  await db().prepare("DELETE FROM checks WHERE checked_at < ?").bind(cutoff).run();
+  await db()
+    .prepare("DELETE FROM incidents WHERE started_at < ? AND resolved_at IS NOT NULL")
+    .bind(cutoff)
+    .run();
 }
+
+// Runs on the Cloudflare scheduled trigger (every minute) and on the manual
+// admin endpoint. `ctx` is only used on scheduled events.
+export async function runScheduledMonitor(_ctx?: unknown) {
+  const checked = await runDueChecks();
+  if (checked.length) console.log(`[monitor] checked ${checked.length} sites`);
+
+  const now = new Date();
+  if (now.getUTCHours() === 0 && now.getUTCMinutes() < 5) {
+    await purgeOldData();
+  }
+  return checked.length;
+}
+
+export type { AppEnv };

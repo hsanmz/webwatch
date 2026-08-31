@@ -1,16 +1,21 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pause, Play, Plus, Send, Trash2 } from "lucide-react";
+import { Loader2, Pause, Play, Plus, Trash2, Activity, Clock, Server } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
-import { createTelegramLink } from "@/lib/telegram.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -28,18 +33,48 @@ type Site = {
   last_checked_at: string | null;
 };
 
+type Me = {
+  id: string;
+  email: string;
+  chat_id: string | null;
+  tg_username: string | null;
+};
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  const data = (await res.json()) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? `Request gagal (${res.status})`);
+  return data;
+}
+
 function StatusDot({ status, active }: { status: string; active: boolean }) {
   const color = !active
+    ? "bg-[var(--paused)]/15 text-[var(--paused)] border border-[var(--paused)]/20"
+    : status === "up"
+      ? "bg-[var(--up)]/15 text-[var(--up)] border border-[var(--up)]/20"
+      : status === "down"
+        ? "bg-[var(--down)]/15 text-[var(--down)] border border-[var(--down)]/20"
+        : "bg-muted text-muted-foreground border border-border";
+  const dotColor = !active
     ? "bg-[var(--paused)]"
     : status === "up"
       ? "bg-[var(--up)]"
       : status === "down"
         ? "bg-[var(--down)]"
         : "bg-muted-foreground";
-  const label = !active ? "Paused" : status === "unknown" ? "Belum dicek" : status.toUpperCase();
+
+  const label = !active ? "Paused" : status === "unknown" ? "Pending" : status.toUpperCase();
   return (
-    <span className="inline-flex items-center gap-2 font-mono text-xs text-muted-foreground">
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest shadow-sm ${color}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${dotColor} ${active && status === "up" ? "live-dot" : ""}`}
+      />
       {label}
     </span>
   );
@@ -48,7 +83,7 @@ function StatusDot({ status, active }: { status: string; active: boolean }) {
 function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const linkTelegram = useServerFn(createTelegramLink);
+  const [openAdd, setOpenAdd] = useState(false);
   const [url, setUrl] = useState("");
   const [minutes, setMinutes] = useState("5");
   const [threshold, setThreshold] = useState("2");
@@ -58,49 +93,35 @@ function Dashboard() {
   const sites = useQuery({
     queryKey: ["sites"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sites")
-        .select(
-          "id,name,url,interval_seconds,fail_threshold,check_keyword,is_active,current_status,last_checked_at",
-        )
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data as Site[];
+      const data = await api<{ sites: Site[] }>("/api/sites");
+      return data.sites;
     },
   });
 
-  const telegram = useQuery({
-    queryKey: ["telegram-account"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("telegram_accounts")
-        .select("chat_id,username")
-        .maybeSingle();
-      return data;
-    },
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api<Me>("/api/auth/me"),
+    retry: false,
   });
 
   const addSite = useMutation({
-    mutationFn: async () => {
-      const raw = url.trim();
-      const full = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-      const parsed = new URL(full);
-      const { error } = await supabase.from("sites").insert({
-        user_id: (await supabase.auth.getUser()).data.user!.id,
-        url: full,
-        name: parsed.hostname,
-        interval_seconds: Math.max(1, Number(minutes) || 5) * 60,
-        fail_threshold: Math.max(1, Number(threshold) || 2),
-        check_keyword: keyword.trim() || null,
-        check_ssl: checkSsl,
-      });
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      api<{ ok: boolean }>("/api/sites", {
+        method: "POST",
+        body: JSON.stringify({
+          url: url.trim(),
+          intervalMinutes: Math.max(1, Number(minutes) || 5),
+          failThreshold: Math.max(1, Number(threshold) || 2),
+          keyword: keyword.trim() || null,
+          ssl: checkSsl,
+        }),
+      }),
     onSuccess: () => {
       setUrl("");
       setKeyword("");
       setThreshold("2");
       setCheckSsl(false);
+      setOpenAdd(false);
       toast.success("Situs ditambahkan");
       queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
@@ -108,185 +129,284 @@ function Dashboard() {
   });
 
   const toggleSite = useMutation({
-    mutationFn: async (site: Site) => {
-      const { error } = await supabase
-        .from("sites")
-        .update({ is_active: !site.is_active, consecutive_failures: 0 })
-        .eq("id", site.id);
-      if (error) throw error;
-    },
+    mutationFn: async (site: Site) =>
+      api<{ ok: boolean }>("/api/sites", {
+        method: "PATCH",
+        body: JSON.stringify({ id: site.id, is_active: !site.is_active }),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sites"] }),
   });
 
   const removeSite = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("sites").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: async (id: string) =>
+      api<{ ok: boolean }>("/api/sites", { method: "DELETE", body: JSON.stringify({ id }) }),
     onSuccess: () => {
       toast.success("Situs dihapus");
       queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
   });
 
-  const connect = useMutation({
-    mutationFn: async () => await linkTelegram({ data: undefined }),
-    onSuccess: (result) => window.open(result.url, "_blank", "noopener"),
-    onError: () => toast.error("Gagal membuat link Telegram"),
-  });
-
   async function signOut() {
-    await supabase.auth.signOut();
-    queryClient.clear();
-    navigate({ to: "/auth" });
+    try {
+      await api("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
+    } finally {
+      queryClient.clear();
+      navigate({ to: "/auth" });
+    }
   }
+
+  const connected = me.data?.chat_id != null;
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
             <img src="/logo.png" alt="WebWatch" className="h-8 w-auto" />
             <span className="font-display text-lg font-bold">
               <span className="text-primary">Web</span>
               <span className="text-foreground">Watch</span>
             </span>
+            <span className="ml-2 hidden rounded-full bg-secondary px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-secondary-foreground md:inline-block">
+              Beta
+            </span>
           </div>
-          <Button variant="ghost" size="sm" onClick={signOut}>
-            Keluar
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-2 md:flex">
+              <span
+                className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest border ${
+                  connected
+                    ? "border-[var(--up)]/20 bg-[var(--up)]/10 text-[var(--up)]"
+                    : "border-border bg-muted text-muted-foreground"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--up)] live-dot" : "bg-muted-foreground"}`}
+                />
+                {connected ? "Telegram Terhubung" : "Telegram Terputus"}
+              </span>
+              {me.data?.email && (
+                <span className="text-sm text-muted-foreground ml-2 mr-2">{me.data.email}</span>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={signOut}>
+              Keluar
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-        <section className="panel flex flex-wrap items-center justify-between gap-4 p-5">
+      <main className="mx-auto max-w-6xl space-y-8 px-4 py-10">
+        {!connected && me.data && (
+          <section className="panel flex flex-wrap items-center justify-between gap-4 border-amber-500/30 bg-amber-500/10 p-5">
+            <div>
+              <h3 className="font-display font-semibold text-amber-500">
+                Telegram Belum Terhubung!
+              </h3>
+              <p className="mt-1 text-sm text-amber-500/80">
+                Kamu belum mengaktifkan notifikasi Telegram. Login ulang di halaman auth untuk
+                menghubungkan.
+              </p>
+            </div>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
+            >
+              <Link to="/auth">Hubungkan Sekarang</Link>
+            </Button>
+          </section>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="font-display text-base font-semibold">Notifikasi Telegram</h2>
+            <h1 className="font-display text-3xl font-bold tracking-tight">Proyek Pemantauan</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {telegram.data
-                ? `Terhubung ke chat ${telegram.data.username ? `@${telegram.data.username}` : telegram.data.chat_id}`
-                : "Hubungkan akun Telegram untuk menerima alert down & recovery."}
+              Kelola semua website yang sedang dipantau.
             </p>
           </div>
-          <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-            {connect.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            {telegram.data ? "Hubungkan ulang" : "Connect Telegram"}
-          </Button>
-        </section>
-
-        <section className="panel p-5">
-          <h2 className="font-display text-base font-semibold">Tambah situs</h2>
-          <form
-            className="mt-4 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              addSite.mutate();
-            }}
-          >
-            <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
-              <div className="space-y-2">
-                <Label htmlFor="url">URL</Label>
-                <Input
-                  id="url"
-                  required
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://situsku.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="interval">Interval (menit)</Label>
-                <Input
-                  id="interval"
-                  type="number"
-                  min={1}
-                  value={minutes}
-                  onChange={(e) => setMinutes(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="threshold">Gagal sebelum down</Label>
-                <Input
-                  id="threshold"
-                  type="number"
-                  min={1}
-                  value={threshold}
-                  onChange={(e) => setThreshold(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid items-end gap-4 sm:grid-cols-[2fr_1fr_auto]">
-              <div className="space-y-2">
-                <Label htmlFor="keyword">Keyword (opsional)</Label>
-                <Input
-                  id="keyword"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  placeholder="Login"
-                />
-              </div>
-              <div className="flex items-center gap-2 pb-2">
-                <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
-                <Label htmlFor="ssl" className="cursor-pointer">
-                  Cek sertifikat SSL
-                </Label>
-              </div>
-              <Button type="submit" disabled={addSite.isPending}>
-                <Plus className="h-4 w-4" />
-                Tambah
+          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> Tambah Situs
               </Button>
-            </div>
-          </form>
-        </section>
-
-        <section className="panel divide-y divide-border">
-          {sites.isLoading && <p className="p-5 text-sm text-muted-foreground">Memuat situs…</p>}
-          {sites.data?.length === 0 && (
-            <p className="p-5 text-sm text-muted-foreground">
-              Belum ada situs yang dipantau. Tambahkan yang pertama di atas.
-            </p>
-          )}
-          {sites.data?.map((site) => (
-            <article
-              key={site.id}
-              className="flex flex-wrap items-center justify-between gap-4 p-5"
-            >
-              <div className="min-w-0">
-                <Link
-                  to="/sites/$id"
-                  params={{ id: site.id }}
-                  className="truncate text-sm font-semibold hover:text-primary"
-                >
-                  {site.name || site.url}
-                </Link>
-                <p className="truncate font-mono text-xs text-muted-foreground">{site.url}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-4">
-                  <StatusDot status={site.current_status} active={site.is_active} />
-                  <span className="font-mono text-xs text-muted-foreground">
-                    tiap {site.interval_seconds / 60}m
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {site.last_checked_at
-                      ? `dicek ${new Date(site.last_checked_at).toLocaleTimeString()}`
-                      : "belum pernah dicek"}
-                  </span>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[550px]">
+              <DialogHeader>
+                <DialogTitle>Tambah Situs Baru</DialogTitle>
+                <DialogDescription>
+                  Masukkan URL dan atur konfigurasi pemantauan. Kami akan mengeceknya secara
+                  berkala.
+                </DialogDescription>
+              </DialogHeader>
+              <form
+                className="mt-2 space-y-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addSite.mutate();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="url">URL Lengkap</Label>
+                  <Input
+                    id="url"
+                    required
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://situsku.com"
+                  />
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={() => toggleSite.mutate(site)}>
-                  {site.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => removeSite.mutate(site.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </article>
-          ))}
-        </section>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="interval">Interval (menit)</Label>
+                    <Input
+                      id="interval"
+                      type="number"
+                      min={1}
+                      value={minutes}
+                      onChange={(e) => setMinutes(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="threshold">Toleransi Gagal (x)</Label>
+                    <Input
+                      id="threshold"
+                      type="number"
+                      min={1}
+                      value={threshold}
+                      onChange={(e) => setThreshold(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="keyword">Pengecekan Keyword (opsional)</Label>
+                  <Input
+                    id="keyword"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    placeholder="Contoh: Login"
+                  />
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-border p-4 bg-card/50">
+                  <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="ssl" className="cursor-pointer font-semibold">
+                      Pantau Sertifikat SSL
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Kirim peringatan jika SSL akan kedaluwarsa (&lt; 7 hari).
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button type="submit" disabled={addSite.isPending}>
+                    {addSite.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Simpan & Pantau
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {sites.isLoading ? (
+          <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : sites.data?.length === 0 ? (
+          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/20 px-4 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-2">
+              <Server className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="font-display text-lg font-semibold">Belum ada situs dipantau</h3>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+              Tambahkan website pertama kamu untuk mulai memantau uptime dan mendapatkan alert
+              Telegram secara real-time.
+            </p>
+            <Button className="mt-6" onClick={() => setOpenAdd(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Tambah Situs Pertama
+            </Button>
+          </div>
+        ) : (
+          <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {sites.data?.map((site) => (
+              <article
+                key={site.id}
+                className="panel group flex flex-col justify-between p-5 transition-all hover:border-primary/50 hover:shadow-glow"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to="/sites/$id"
+                        params={{ id: site.id }}
+                        className="block truncate font-display text-lg font-semibold transition-colors hover:text-primary focus:outline-none"
+                      >
+                        {site.name || site.url}
+                      </Link>
+                      <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                        {site.url}
+                      </p>
+                    </div>
+                    <div className="shrink-0 pt-0.5">
+                      <StatusDot status={site.current_status} active={site.is_active} />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Activity className="h-3 w-3" /> tiap {site.interval_seconds / 60}m
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />{" "}
+                      {site.last_checked_at
+                        ? `cek ${new Date(site.last_checked_at).toLocaleTimeString().slice(0, 5)}`
+                        : "belum dicek"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between border-t border-border/60 pt-4">
+                  <Button asChild variant="secondary" size="sm" className="h-8 text-xs font-medium">
+                    <Link to="/sites/$id" params={{ id: site.id }}>
+                      Lihat Metrik
+                    </Link>
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleSite.mutate(site)}
+                      title={site.is_active ? "Jeda pemantauan" : "Lanjutkan pemantauan"}
+                    >
+                      {site.is_active ? (
+                        <Pause className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        if (
+                          confirm(`Hapus ${site.name || site.url}? Riwayat akan hilang permanen.`)
+                        ) {
+                          removeSite.mutate(site.id);
+                        }
+                      }}
+                      title="Hapus situs"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
       </main>
     </div>
   );

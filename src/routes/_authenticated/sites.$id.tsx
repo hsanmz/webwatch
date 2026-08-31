@@ -15,7 +15,6 @@ import {
   YAxis,
 } from "recharts";
 
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +36,18 @@ function dayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+type SiteRow = {
+  id: string;
+  name: string | null;
+  url: string;
+  current_status: string;
+  is_active: boolean;
+  interval_seconds: number;
+  fail_threshold: number;
+  check_keyword: string | null;
+  check_ssl: boolean;
+};
+
 type CheckRow = {
   id: string;
   is_up: boolean;
@@ -46,53 +57,33 @@ type CheckRow = {
   checked_at: string;
 };
 
+type IncidentRow = {
+  id: string;
+  started_at: string;
+  resolved_at: string | null;
+  error_message: string | null;
+};
+
+type Detail = { site: SiteRow; checks: CheckRow[]; incidents: IncidentRow[] };
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  const data = (await res.json()) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? `Request gagal (${res.status})`);
+  return data;
+}
+
 function SiteDetail() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
 
-  const site = useQuery({
-    queryKey: ["site", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sites")
-        .select(
-          "id,name,url,current_status,is_active,interval_seconds,fail_threshold,check_keyword,check_ssl",
-        )
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const since = new Date(Date.now() - 30 * DAY_MS).toISOString();
-
-  const checks = useQuery({
-    queryKey: ["checks", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("checks")
-        .select("id,is_up,status_code,response_time_ms,error_message,checked_at")
-        .eq("site_id", id)
-        .gte("checked_at", since)
-        .order("checked_at", { ascending: true });
-      if (error) throw error;
-      return data as CheckRow[];
-    },
-  });
-
-  const incidents = useQuery({
-    queryKey: ["incidents", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("incidents")
-        .select("id,started_at,resolved_at,error_message")
-        .eq("site_id", id)
-        .order("started_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data;
-    },
+  const detail = useQuery({
+    queryKey: ["site-detail", id],
+    queryFn: () => api<Detail>(`/api/sites/detail?id=${encodeURIComponent(id)}`),
   });
 
   const [intervalMinutes, setIntervalMinutes] = useState("5");
@@ -100,36 +91,37 @@ function SiteDetail() {
   const [keyword, setKeyword] = useState("");
   const [checkSsl, setCheckSsl] = useState(false);
 
+  const site = detail.data?.site ?? null;
+  const all = detail.data?.checks ?? [];
+
   useEffect(() => {
-    if (!site.data) return;
-    setIntervalMinutes(String(Math.max(1, Math.round(site.data.interval_seconds / 60))));
-    setFailThreshold(String(site.data.fail_threshold));
-    setKeyword(site.data.check_keyword ?? "");
-    setCheckSsl(site.data.check_ssl);
-  }, [site.data]);
+    if (!site) return;
+    setIntervalMinutes(String(Math.max(1, Math.round(site.interval_seconds / 60))));
+    setFailThreshold(String(site.fail_threshold));
+    setKeyword(site.check_keyword ?? "");
+    setCheckSsl(site.check_ssl);
+  }, [site]);
 
   const saveSettings = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("sites")
-        .update({
-          interval_seconds: Math.max(1, Number(intervalMinutes) || 5) * 60,
-          fail_threshold: Math.max(1, Number(failThreshold) || 2),
-          check_keyword: keyword.trim() || null,
-          check_ssl: checkSsl,
-        })
-        .eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: async () =>
+      api<{ ok: boolean }>("/api/sites", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id,
+          intervalMinutes: Math.max(1, Number(intervalMinutes) || 5),
+          failThreshold: Math.max(1, Number(failThreshold) || 2),
+          keyword: keyword.trim() || null,
+          ssl: checkSsl,
+        }),
+      }),
     onSuccess: () => {
       toast.success("Pengaturan disimpan");
-      queryClient.invalidateQueries({ queryKey: ["site", id] });
-      queryClient.invalidateQueries({ queryKey: ["checks", id] });
+      queryClient.invalidateQueries({ queryKey: ["site-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const all = checks.data ?? [];
   const now = Date.now();
 
   function uptimeFor(windowMs: number) {
@@ -185,23 +177,23 @@ function SiteDetail() {
         <ArrowLeft className="h-4 w-4" /> kembali ke dashboard
       </Link>
 
-      {site.isLoading && <p className="text-sm text-muted-foreground">Memuat…</p>}
-      {!site.isLoading && !site.data && (
+      {detail.isLoading && <p className="text-sm text-muted-foreground">Memuat…</p>}
+      {!detail.isLoading && !site && (
         <p className="text-sm text-muted-foreground">Situs tidak ditemukan.</p>
       )}
 
-      {site.data && (
+      {site && (
         <>
           <header>
-            <h1 className="font-display text-2xl font-bold">{site.data.name || site.data.url}</h1>
-            <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{site.data.url}</p>
+            <h1 className="font-display text-2xl font-bold">{site.name || site.url}</h1>
+            <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{site.url}</p>
           </header>
 
           <section className="grid gap-4 sm:grid-cols-3">
             <div className="panel p-5">
               <p className="font-mono text-xs text-muted-foreground">Status</p>
               <p className="mt-2 font-display text-xl font-semibold">
-                {!site.data.is_active ? "Paused" : site.data.current_status.toUpperCase()}
+                {!site.is_active ? "Paused" : site.current_status.toUpperCase()}
               </p>
             </div>
             {Object.entries(windows).map(([label, stats]) => (
@@ -355,10 +347,10 @@ function SiteDetail() {
           <section className="panel p-5">
             <h2 className="font-display text-base font-semibold">Insiden</h2>
             <ul className="mt-4 space-y-3">
-              {incidents.data?.length === 0 && (
+              {detail.data?.incidents.length === 0 && (
                 <li className="text-sm text-muted-foreground">Belum ada insiden 🎉</li>
               )}
-              {incidents.data?.map((incident) => (
+              {detail.data?.incidents.map((incident) => (
                 <li key={incident.id} className="font-mono text-xs text-muted-foreground">
                   <span className="text-foreground">
                     {new Date(incident.started_at).toLocaleString()}

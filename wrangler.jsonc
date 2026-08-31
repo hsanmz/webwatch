@@ -1,26 +1,30 @@
-// Wrangler config for Git-based (Workers Builds) deployment.
-// Mirrors the config Nitro auto-generates into .output/server/wrangler.json
-// so Cloudflare's "Deploy with Git" builds the fullstack app from this repo.
-// Build locally with `bun run build`, then Cloudflare runs `wrangler deploy`
-// using this file.
+// Wrangler config for Cloudflare Workers deployment.
+// Build locally with `bun run build`, then `bunx wrangler deploy`.
+// Secrets (TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET) set via wrangler CLI.
 {
   "name": "webwatch",
   "main": ".output/server/index.mjs",
   "assets": {
     "binding": "ASSETS",
-    "directory": ".output/public"
+    "directory": ".output/public",
   },
   "compatibility_date": "2026-08-31",
   "compatibility_flags": ["nodejs_compat"],
-  "vars": {
-    "SUPABASE_URL": "https://kdiftjdgiswypakdfrdy.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_g6XabaJDIa4iXvCRX3ipsg_WzwLGRrj"
-  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "webwatch",
+      "database_id": "1e799485-7ea5-444e-9858-a54e1d476011",
+      "migrations_dir": "migrations/d1",
+    },
+  ],
+  "triggers": {},
+  "vars": {},
   "no_bundle": true,
   "rules": [
     {
       "type": "ESModule",
-      "globs": ["**/*.mjs", "**/*.js"]
-    }
-  ]
+      "globs": ["**/*.mjs", "**/*.js"],
+    },
+  ],
 }

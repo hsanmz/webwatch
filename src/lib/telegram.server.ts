@@ -95,3 +95,14 @@ export function formatSslWarningMessage(input: {
     `Waktu: ${utcTimestamp(input.at)}`,
   ].join("\n");
 }
+
+export function formatOtpMessage(email: string, code: string) {
+  return [
+    `🔐 <b>Kode masuk WebWatch</b>`,
+    ``,
+    `<code>${code}</code>`,
+    ``,
+    `Berlaku 5 menit dan dipakai sekali. Jangan bagikan kode ini ke siapa pun.`,
+    `Email: ${escapeHtml(email)}`,
+  ].join("\n");
+}

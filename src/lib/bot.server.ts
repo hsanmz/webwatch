@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { db } from "./wrangler-env";
+import { ensureUser, newId } from "./auth.server";
 import { escapeHtml, humanDuration, sendTelegram } from "./telegram.server";
 
 const HELP = [
@@ -17,26 +18,31 @@ function shortId(id: string) {
 }
 
 async function userIdForChat(chatId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from("telegram_accounts")
-    .select("user_id")
-    .eq("chat_id", chatId)
-    .maybeSingle();
-  return data?.user_id ?? null;
+  const row = await db()
+    .prepare("SELECT id FROM users WHERE chat_id = ? LIMIT 1")
+    .bind(chatId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
 }
 
 async function findSite(userId: string, ref: string) {
-  const { data } = await supabaseAdmin
-    .from("sites")
-    .select("id,name,url,is_active,current_status")
-    .eq("user_id", userId)
-    .ilike("id", `${ref}%`)
-    .limit(2);
-  if (!data || data.length !== 1) return null;
-  return data[0];
+  const { results } = await db()
+    .prepare(
+      "SELECT id, name, url, is_active, current_status FROM sites WHERE user_id = ? AND id LIKE ? LIMIT 2",
+    )
+    .bind(userId, `${ref}%`)
+    .all<{
+      id: string;
+      name: string | null;
+      url: string;
+      is_active: number;
+      current_status: string;
+    }>();
+  if (!results || results.length !== 1) return null;
+  return results[0];
 }
 
-function statusIcon(status: string, active: boolean) {
+function statusIcon(status: string, active: number) {
   if (!active) return "⏸️";
   if (status === "up") return "🟢";
   if (status === "down") return "🔴";
@@ -48,59 +54,79 @@ async function handleStart(chatId: string, arg: string | undefined, username: st
     const linked = await userIdForChat(chatId);
     return linked
       ? `Akun ini sudah terhubung ✅\n\n${HELP}`
-      : "Halo! Buka dashboard WebWatch, klik <b>Connect Telegram</b>, lalu ikuti link-nya untuk menghubungkan akun.";
+      : "Halo! Buka dashboard WebWatch, masukkan email, lalu ikuti link untuk menghubungkan chat ini. Kode masuk akan dikirim ke sini.";
   }
 
-  const { data: link } = await supabaseAdmin
-    .from("telegram_links")
-    .select("id,user_id,status,expires_at")
-    .eq("token", arg)
-    .maybeSingle();
+  const link = await db()
+    .prepare("SELECT token, email, status, expires_at FROM telegram_links WHERE token = ? LIMIT 1")
+    .bind(arg)
+    .first<{ token: string; email: string; status: string; expires_at: string }>();
 
   if (!link || link.status !== "pending" || new Date(link.expires_at).getTime() < Date.now()) {
-    return "❌ Token tidak valid atau sudah kedaluwarsa. Buat link baru dari dashboard.";
+    return "❌ Token tidak valid atau sudah kedaluwarsa. Buka lagi halaman login WebWatch untuk membuat link baru.";
   }
 
-  await supabaseAdmin
-    .from("telegram_accounts")
-    .upsert({ user_id: link.user_id, chat_id: chatId, username }, { onConflict: "user_id" });
-  await supabaseAdmin.from("telegram_links").update({ status: "linked" }).eq("id", link.id);
+  await db()
+    .prepare(
+      "UPDATE telegram_links SET chat_id = ?, tg_username = ?, status = 'linked' WHERE token = ?",
+    )
+    .bind(chatId, username, link.token)
+    .run();
+  await ensureUser(link.email);
 
-  return `✅ Akun Telegram terhubung! Notifikasi downtime akan dikirim ke chat ini.\n\n${HELP}`;
+  return `✅ Telegram terhubung untuk <b>${escapeHtml(link.email)}</b>. Kembali ke halaman login WebWatch untuk menerima kode masuk di chat ini.\n\n${HELP}`;
 }
 
 async function handleAddSite(userId: string, args: string[]) {
   const raw = args[0];
   if (!raw) return "Format: /addsite &lt;url&gt; [interval_menit]";
-  const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const guess = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed: URL;
   try {
-    new URL(url);
+    parsed = new URL(guess);
   } catch {
     return "URL tidak valid.";
   }
+  if (!parsed.hostname.includes(".")) return "URL tidak valid.";
+
+  const url = parsed.toString();
+  const taken = await db()
+    .prepare("SELECT id FROM sites WHERE url = ? LIMIT 1")
+    .bind(url)
+    .first<{ id: string }>();
+  if (taken) return "❌ URL sudah dipantau akun lain.";
+
   const minutes = Math.max(1, Number(args[1] ?? 5) || 5);
-  const { data, error } = await supabaseAdmin
-    .from("sites")
-    .insert({
-      user_id: userId,
-      url,
-      name: new URL(url).hostname,
-      interval_seconds: minutes * 60,
-    })
-    .select("id")
-    .single();
-  if (error) return `Gagal menambah situs: ${escapeHtml(error.message)}`;
-  return `✅ Ditambahkan: <code>${escapeHtml(url)}</code>\nID: <code>${shortId(data.id)}</code>\nInterval: ${minutes} menit`;
+  const id = newId();
+  try {
+    await db()
+      .prepare(
+        "INSERT INTO sites (id, user_id, url, name, interval_seconds) VALUES (?, ?, ?, ?, ?)",
+      )
+      .bind(id, userId, url, parsed.hostname, minutes * 60)
+      .run();
+  } catch {
+    return "❌ URL sudah dipantau akun lain.";
+  }
+  return `✅ Ditambahkan: <code>${escapeHtml(url)}</code>\nID: <code>${shortId(id)}</code>\nInterval: ${minutes} menit`;
 }
 
 async function handleList(userId: string) {
-  const { data } = await supabaseAdmin
-    .from("sites")
-    .select("id,name,url,current_status,is_active,interval_seconds")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
-  if (!data?.length) return "Belum ada situs. Tambah dengan /addsite &lt;url&gt;";
-  return data
+  const { results } = await db()
+    .prepare(
+      "SELECT id, name, url, current_status, is_active, interval_seconds FROM sites WHERE user_id = ? ORDER BY created_at ASC",
+    )
+    .bind(userId)
+    .all<{
+      id: string;
+      name: string | null;
+      url: string;
+      current_status: string;
+      is_active: number;
+      interval_seconds: number;
+    }>();
+  if (!results?.length) return "Belum ada situs. Tambah dengan /addsite &lt;url&gt;";
+  return results
     .map(
       (s) =>
         `${statusIcon(s.current_status, s.is_active)} <b>${escapeHtml(s.name || s.url)}</b>\n<code>${shortId(s.id)}</code> · ${s.interval_seconds / 60}m · ${escapeHtml(s.url)}`,
@@ -114,22 +140,22 @@ async function handleHistory(userId: string, ref: string | undefined) {
   if (!site) return "Situs tidak ditemukan.";
 
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const { data: checks } = await supabaseAdmin
-    .from("checks")
-    .select("is_up")
-    .eq("site_id", site.id)
-    .gte("checked_at", since);
-  const total = checks?.length ?? 0;
-  const up = checks?.filter((c) => c.is_up).length ?? 0;
+  const agg = await db()
+    .prepare(
+      "SELECT COUNT(*) AS total, COALESCE(SUM(is_up), 0) AS up FROM checks WHERE site_id = ? AND checked_at >= ?",
+    )
+    .bind(site.id, since)
+    .first<{ total: number; up: number }>();
+  const total = Number(agg?.total ?? 0);
+  const up = Number(agg?.up ?? 0);
   const uptime = total ? ((up / total) * 100).toFixed(2) : "—";
 
-  const { data: incidents } = await supabaseAdmin
-    .from("incidents")
-    .select("started_at,resolved_at,error_message")
-    .eq("site_id", site.id)
-    .gte("started_at", since)
-    .order("started_at", { ascending: false })
-    .limit(5);
+  const { results: incidents } = await db()
+    .prepare(
+      "SELECT started_at, resolved_at, error_message FROM incidents WHERE site_id = ? AND started_at >= ? ORDER BY started_at DESC LIMIT 5",
+    )
+    .bind(site.id, since)
+    .all<{ started_at: string; resolved_at: string | null; error_message: string | null }>();
 
   const lines = [
     `📊 <b>${escapeHtml(site.name || site.url)}</b>`,
@@ -162,14 +188,17 @@ export async function handleTelegramUpdate(update: {
   const command = (rawCommand.split("@")[0] ?? "").toLowerCase();
 
   if (command === "/start") {
-    return sendTelegram(chatId, await handleStart(chatId, args[0], message?.from?.username ?? null));
+    return sendTelegram(
+      chatId,
+      await handleStart(chatId, args[0], message?.from?.username ?? null),
+    );
   }
 
   const userId = await userIdForChat(chatId);
   if (!userId) {
     return sendTelegram(
       chatId,
-      "Akun ini belum terhubung. Buka dashboard WebWatch → <b>Connect Telegram</b>.",
+      "Akun ini belum terhubung. Buka dashboard WebWatch dan ikuti link di halaman login.",
     );
   }
 
@@ -190,22 +219,26 @@ export async function handleTelegramUpdate(update: {
       const site = args[0] ? await findSite(userId, args[0]) : null;
       if (!site) reply = "Format: /removesite &lt;id&gt;";
       else {
-        await supabaseAdmin.from("sites").delete().eq("id", site.id).eq("user_id", userId);
+        await db()
+          .prepare("DELETE FROM sites WHERE id = ? AND user_id = ?")
+          .bind(site.id, userId)
+          .run();
         reply = `🗑️ Dihapus: ${escapeHtml(site.name || site.url)}`;
       }
       break;
     }
     case "/pause":
     case "/resume": {
-      const active = command === "/resume";
+      const active = command === "/resume" ? 1 : 0;
       const site = args[0] ? await findSite(userId, args[0]) : null;
       if (!site) reply = `Format: ${command} &lt;id&gt;`;
       else {
-        await supabaseAdmin
-          .from("sites")
-          .update({ is_active: active, consecutive_failures: 0 })
-          .eq("id", site.id)
-          .eq("user_id", userId);
+        await db()
+          .prepare(
+            "UPDATE sites SET is_active = ?, consecutive_failures = 0 WHERE id = ? AND user_id = ?",
+          )
+          .bind(active, site.id, userId)
+          .run();
         reply = `${active ? "▶️ Dilanjutkan" : "⏸️ Dijeda"}: ${escapeHtml(site.name || site.url)}`;
       }
       break;
