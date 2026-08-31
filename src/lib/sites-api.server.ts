@@ -131,8 +131,8 @@ export async function createSite(request: Request): Promise<Response> {
   if (!url) return json({ error: "url_invalid" }, 400);
 
   const taken = await db()
-    .prepare("SELECT id FROM sites WHERE url = ? LIMIT 1")
-    .bind(url)
+    .prepare("SELECT id FROM sites WHERE url = ? AND user_id = ? LIMIT 1")
+    .bind(url, user.id)
     .first<{ id: string }>();
   if (taken) return json({ error: "url_taken" }, 409);
 
@@ -156,8 +156,9 @@ export async function createSite(request: Request): Promise<Response> {
         token,
       )
       .run();
-  } catch {
-    return json({ error: "url_taken" }, 409);
+  } catch (error) {
+    console.error("[createSite] DB Insert error:", error);
+    return json({ error: "server_error" }, 500);
   }
   return json({ ok: true, id });
 }
