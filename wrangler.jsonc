@@ -1,0 +1,26 @@
+// Wrangler config for Git-based (Workers Builds) deployment.
+// Mirrors the config Nitro auto-generates into .output/server/wrangler.json
+// so Cloudflare's "Deploy with Git" builds the fullstack app from this repo.
+// Build locally with `bun run build`, then Cloudflare runs `wrangler deploy`
+// using this file.
+{
+  "name": "webwatch",
+  "main": ".output/server/index.mjs",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "SUPABASE_URL": "https://kdiftjdgiswypakdfrdy.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_g6XabaJDIa4iXvCRX3ipsg_WzwLGRrj"
+  },
+  "no_bundle": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": ["**/*.mjs", "**/*.js"]
+    }
+  ]
+}
