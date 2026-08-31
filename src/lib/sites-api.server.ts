@@ -84,15 +84,20 @@ export async function listSites(request: Request): Promise<Response> {
   const denied = await userFor(request);
   if (denied) return denied;
   const user = (await requireUser(request))!;
-  const { results } = await db()
-    .prepare(
-      `SELECT id, name, url, interval_seconds, fail_threshold, check_keyword, check_ssl,
-              is_active, current_status, last_checked_at, verification_token, verification_status
-       FROM sites WHERE user_id = ? ORDER BY created_at ASC`,
-    )
-    .bind(user.id)
-    .all<SiteDbRow>();
-  return json({ sites: (results ?? []).map(mapSite) });
+  try {
+    const { results } = await db()
+      .prepare(
+        `SELECT id, name, url, interval_seconds, fail_threshold, check_keyword, check_ssl,
+                is_active, current_status, last_checked_at, verification_token, verification_status
+         FROM sites WHERE user_id = ? ORDER BY created_at ASC`,
+      )
+      .bind(user.id)
+      .all<SiteDbRow>();
+    return json({ sites: (results ?? []).map(mapSite) });
+  } catch (error) {
+    console.error("[listSites] DB error:", error);
+    return json({ error: "server_error" }, 500);
+  }
 }
 
 type CreateSiteBody = {
@@ -131,8 +136,8 @@ export async function createSite(request: Request): Promise<Response> {
   if (!url) return json({ error: "url_invalid" }, 400);
 
   const taken = await db()
-    .prepare("SELECT id FROM sites WHERE url = ? AND user_id = ? LIMIT 1")
-    .bind(url, user.id)
+    .prepare("SELECT id FROM sites WHERE url = ? LIMIT 1")
+    .bind(url)
     .first<{ id: string }>();
   if (taken) return json({ error: "url_taken" }, 409);
 
@@ -157,6 +162,10 @@ export async function createSite(request: Request): Promise<Response> {
       )
       .run();
   } catch (error) {
+    const msg = error instanceof Error ? error.message.toLowerCase() : "";
+    if (msg.includes("unique") || msg.includes("constraint")) {
+      return json({ error: "url_taken" }, 409);
+    }
     console.error("[createSite] DB Insert error:", error);
     return json({ error: "server_error" }, 500);
   }
@@ -177,50 +186,55 @@ export async function updateSite(request: Request): Promise<Response> {
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return json({ error: "id_required" }, 400);
 
-  const current = await db()
-    .prepare(
-      "SELECT interval_seconds, fail_threshold, check_keyword, check_ssl, is_active FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
-    )
-    .bind(id, user.id)
-    .first<{
-      interval_seconds: number;
-      fail_threshold: number;
-      check_keyword: string | null;
-      check_ssl: number;
-      is_active: number;
-    }>();
-  if (!current) return json({ error: "not_found" }, 404);
+  try {
+    const current = await db()
+      .prepare(
+        "SELECT interval_seconds, fail_threshold, check_keyword, check_ssl, is_active FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
+      )
+      .bind(id, user.id)
+      .first<{
+        interval_seconds: number;
+        fail_threshold: number;
+        check_keyword: string | null;
+        check_ssl: number;
+        is_active: number;
+      }>();
+    if (!current) return json({ error: "not_found" }, 404);
 
-  const patch = (body.patch ?? body) as Record<string, unknown>;
+    const patch = (body.patch ?? body) as Record<string, unknown>;
 
-  const intervalSeconds =
-    patch["intervalMinutes"] !== undefined
-      ? clampInt(patch["intervalMinutes"], 5, 1, 1440) * 60
-      : current.interval_seconds;
-  const failThreshold =
-    patch["failThreshold"] !== undefined
-      ? clampInt(patch["failThreshold"], 2, 1, 100)
-      : current.fail_threshold;
-  const keyword =
-    patch["keyword"] !== undefined
-      ? typeof patch["keyword"] === "string" && patch["keyword"].trim()
-        ? patch["keyword"].trim()
-        : null
-      : current.check_keyword;
-  const checkSsl = patch["ssl"] !== undefined ? (patch["ssl"] === true ? 1 : 0) : current.check_ssl;
-  const isActive =
-    patch["is_active"] !== undefined ? (patch["is_active"] === true ? 1 : 0) : current.is_active;
+    const intervalSeconds =
+      patch["intervalMinutes"] !== undefined
+        ? clampInt(patch["intervalMinutes"], 5, 1, 1440) * 60
+        : current.interval_seconds;
+    const failThreshold =
+      patch["failThreshold"] !== undefined
+        ? clampInt(patch["failThreshold"], 2, 1, 100)
+        : current.fail_threshold;
+    const keyword =
+      patch["keyword"] !== undefined
+        ? typeof patch["keyword"] === "string" && patch["keyword"].trim()
+          ? patch["keyword"].trim()
+          : null
+        : current.check_keyword;
+    const checkSsl = patch["ssl"] !== undefined ? (patch["ssl"] === true ? 1 : 0) : current.check_ssl;
+    const isActive =
+      patch["is_active"] !== undefined ? (patch["is_active"] === true ? 1 : 0) : current.is_active;
 
-  await db()
-    .prepare(
-      `UPDATE sites SET
-        interval_seconds = ?, fail_threshold = ?, check_keyword = ?, check_ssl = ?, is_active = ?,
-        consecutive_failures = CASE WHEN ? = 1 AND is_active = 0 THEN 0 ELSE consecutive_failures END
-       WHERE id = ? AND user_id = ?`,
-    )
-    .bind(intervalSeconds, failThreshold, keyword, checkSsl, isActive, isActive, id, user.id)
-    .run();
-  return json({ ok: true });
+    await db()
+      .prepare(
+        `UPDATE sites SET
+          interval_seconds = ?, fail_threshold = ?, check_keyword = ?, check_ssl = ?, is_active = ?,
+          consecutive_failures = CASE WHEN ? = 1 AND is_active = 0 THEN 0 ELSE consecutive_failures END
+         WHERE id = ? AND user_id = ?`,
+      )
+      .bind(intervalSeconds, failThreshold, keyword, checkSsl, isActive, isActive, id, user.id)
+      .run();
+    return json({ ok: true });
+  } catch (error) {
+    console.error("[updateSite] DB error:", error);
+    return json({ error: "server_error" }, 500);
+  }
 }
 
 export async function deleteSite(request: Request): Promise<Response> {
@@ -237,12 +251,17 @@ export async function deleteSite(request: Request): Promise<Response> {
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return json({ error: "id_required" }, 400);
 
-  const result = await db()
-    .prepare("DELETE FROM sites WHERE id = ? AND user_id = ?")
-    .bind(id, user.id)
-    .run();
-  if (!result.success) return json({ error: "delete_failed" }, 500);
-  return json({ ok: true });
+  try {
+    const result = await db()
+      .prepare("DELETE FROM sites WHERE id = ? AND user_id = ?")
+      .bind(id, user.id)
+      .run();
+    if (!result.success) return json({ error: "delete_failed" }, 500);
+    return json({ ok: true });
+  } catch (error) {
+    console.error("[deleteSite] DB error:", error);
+    return json({ error: "server_error" }, 500);
+  }
 }
 
 export async function siteDetail(request: Request): Promise<Response> {
@@ -254,53 +273,58 @@ export async function siteDetail(request: Request): Promise<Response> {
   const id = url.searchParams.get("id") ?? "";
   if (!id) return json({ error: "id_required" }, 400);
 
-  const site = await db()
-    .prepare(
-      `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status
-       FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
-    )
-    .bind(id, user.id)
-    .first<SiteDbRow>();
-  if (!site) return json({ error: "not_found" }, 404);
+  try {
+    const site = await db()
+      .prepare(
+        `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status
+         FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
+      )
+      .bind(id, user.id)
+      .first<SiteDbRow>();
+    if (!site) return json({ error: "not_found" }, 404);
 
-  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { results: checksDb } = await db()
-    .prepare(
-      "SELECT id, is_up, status_code, response_time_ms, error_message, checked_at FROM checks WHERE site_id = ? AND checked_at >= ? ORDER BY checked_at DESC LIMIT 5000",
-    )
-    .bind(site.id, since)
-    .all<{
-      id: string;
-      is_up: number;
-      status_code: number | null;
-      response_time_ms: number | null;
-      error_message: string | null;
-      checked_at: string;
-    }>();
-  const checks = (checksDb ?? [])
-    .map((c) => ({
-      id: c.id,
-      is_up: toBool(c.is_up),
-      status_code: c.status_code,
-      response_time_ms: c.response_time_ms,
-      error_message: c.error_message,
-      checked_at: c.checked_at,
-    }))
-    .reverse();
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const { results: checksDb } = await db()
+      .prepare(
+        "SELECT id, is_up, status_code, response_time_ms, error_message, checked_at FROM checks WHERE site_id = ? AND checked_at >= ? ORDER BY checked_at DESC LIMIT 5000",
+      )
+      .bind(site.id, since)
+      .all<{
+        id: string;
+        is_up: number;
+        status_code: number | null;
+        response_time_ms: number | null;
+        error_message: string | null;
+        checked_at: string;
+      }>();
+    const checks = (checksDb ?? [])
+      .map((c) => ({
+        id: c.id,
+        is_up: toBool(c.is_up),
+        status_code: c.status_code,
+        response_time_ms: c.response_time_ms,
+        error_message: c.error_message,
+        checked_at: c.checked_at,
+      }))
+      .reverse();
 
-  const { results: incidents } = await db()
-    .prepare(
-      "SELECT id, started_at, resolved_at, error_message FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT 20",
-    )
-    .bind(site.id)
-    .all<{
-      id: string;
-      started_at: string;
-      resolved_at: string | null;
-      error_message: string | null;
-    }>();
+    const { results: incidents } = await db()
+      .prepare(
+        "SELECT id, started_at, resolved_at, error_message FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT 20",
+      )
+      .bind(site.id)
+      .all<{
+        id: string;
+        started_at: string;
+        resolved_at: string | null;
+        error_message: string | null;
+      }>();
 
-  return json({ site: mapSite(site), checks, incidents: incidents ?? [] });
+    return json({ site: mapSite(site), checks, incidents: incidents ?? [] });
+  } catch (error) {
+    console.error("[siteDetail] DB error:", error);
+    return json({ error: "server_error" }, 500);
+  }
 }
 
 export async function verifySite(request: Request): Promise<Response> {
@@ -317,12 +341,18 @@ export async function verifySite(request: Request): Promise<Response> {
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return json({ error: "id_required" }, 400);
 
-  const site = await db()
-    .prepare(
-      "SELECT url, verification_token, verification_status FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
-    )
-    .bind(id, user.id)
-    .first<{ url: string; verification_token: string | null; verification_status: string }>();
+  let site;
+  try {
+    site = await db()
+      .prepare(
+        "SELECT url, verification_token, verification_status FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
+      )
+      .bind(id, user.id)
+      .first<{ url: string; verification_token: string | null; verification_status: string }>();
+  } catch (error) {
+    console.error("[verifySite] DB error:", error);
+    return json({ error: "server_error" }, 500);
+  }
 
   if (!site) return json({ error: "not_found" }, 404);
   if (site.verification_status === "verified") return json({ ok: true, status: "verified" });
@@ -339,11 +369,16 @@ export async function verifySite(request: Request): Promise<Response> {
     }
     const text = await res.text();
     if (text.includes(site.verification_token)) {
-      await db()
-        .prepare("UPDATE sites SET verification_status = 'verified' WHERE id = ?")
-        .bind(id)
-        .run();
-      return json({ ok: true, status: "verified" });
+      try {
+        await db()
+          .prepare("UPDATE sites SET verification_status = 'verified' WHERE id = ?")
+          .bind(id)
+          .run();
+        return json({ ok: true, status: "verified" });
+      } catch (error) {
+        console.error("[verifySite] DB update error:", error);
+        return json({ error: "server_error" }, 500);
+      }
     } else {
       return json({ ok: false, error: "token_mismatch" });
     }

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -63,6 +63,24 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
+type UrlCheck = { ok: boolean; message: string | null };
+
+function validateUrl(raw: string): UrlCheck {
+  const value = raw.trim();
+  if (!value) return { ok: false, message: "URL wajib diisi." };
+  const normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return { ok: false, message: "Format URL tidak valid." };
+  }
+  if (!parsed.hostname.includes(".")) {
+    return { ok: false, message: "Format URL tidak valid masukkan domain yang benar." };
+  }
+  return { ok: true, message: null };
+}
+
 function StatusDot({ status, active }: { status: string; active: boolean }) {
   const color = !active
     ? "bg-[var(--paused)]/15 text-[var(--paused)] border border-[var(--paused)]/20"
@@ -101,6 +119,9 @@ function Dashboard() {
   const [threshold, setThreshold] = useState("2");
   const [keyword, setKeyword] = useState("");
   const [checkSsl, setCheckSsl] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  const urlCheck = useMemo(() => validateUrl(url), [url]);
 
   const sites = useQuery({
     queryKey: ["sites"],
@@ -120,8 +141,12 @@ function Dashboard() {
   });
 
   const addSite = useMutation({
-    mutationFn: () =>
-      api<{ ok: boolean }>("/api/sites", {
+    mutationFn: () => {
+      if (!urlCheck.ok) {
+        setUrlError(urlCheck.message);
+        throw new Error(urlCheck.message ?? "URL tidak valid");
+      }
+      return api<{ ok: boolean }>("/api/sites", {
         method: "POST",
         body: JSON.stringify({
           url: url.trim(),
@@ -130,17 +155,25 @@ function Dashboard() {
           keyword: keyword.trim() || null,
           ssl: checkSsl,
         }),
-      }),
+      });
+    },
     onSuccess: () => {
       setUrl("");
       setKeyword("");
       setThreshold("2");
       setCheckSsl(false);
+      setUrlError(null);
       setOpenAdd(false);
       toast.success("Situs ditambahkan");
       queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      if (error.message === "url_taken") {
+        setUrlError("URL sudah dipantau oleh akun lain. Pilih URL lain.");
+        return;
+      }
+      toast.error(error.message);
+    },
   });
 
   const toggleSite = useMutation({
@@ -287,7 +320,8 @@ function Dashboard() {
                 className="mt-2 space-y-5"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  addSite.mutate();
+                  setUrlError(urlCheck.ok ? null : urlCheck.message);
+                  if (urlCheck.ok) addSite.mutate();
                 }}
               >
                 <div className="space-y-2">
@@ -296,9 +330,28 @@ function Dashboard() {
                     id="url"
                     required
                     value={url}
-                    onChange={(e) => setUrl(e.target.value)}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setUrlError(null);
+                    }}
                     placeholder="https://situsku.com"
+                    aria-invalid={!!urlError}
                   />
+                  {urlError ? (
+                    <p className="text-xs font-medium text-[var(--down)]">{urlError}</p>
+                  ) : (
+                    url.trim() !== "" &&
+                    urlCheck.ok && (
+                      <p className="text-xs text-muted-foreground">
+                        Akan dipantau sebagai{" "}
+                        <code className="bg-muted px-1 py-0.5 rounded">
+                          {/^https?:\/\//i.test(url.trim())
+                            ? url.trim()
+                            : `https://${url.trim()}`}
+                        </code>
+                      </p>
+                    )
+                  )}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -343,7 +396,10 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="flex justify-end pt-2">
-                  <Button type="submit" disabled={addSite.isPending}>
+                  <Button
+                    type="submit"
+                    disabled={addSite.isPending || (url.trim() !== "" && !urlCheck.ok)}
+                  >
                     {addSite.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Simpan & Pantau
                   </Button>
