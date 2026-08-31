@@ -70,27 +70,73 @@
   --card-foreground: oklch(0.95 0.008 250);
   --popover: oklch(0.212 0.02 252);
   --popover-foreground: oklch(0.95 0.008 250);
-  --primary: oklch(0.78 0.17 155);
-  --primary-foreground: oklch(0.18 0.03 155);
+  --primary: oklch(0.76 0.13 178);
+  --primary-foreground: oklch(0.11 0.03 178);
   --secondary: oklch(0.27 0.022 252);
   --secondary-foreground: oklch(0.93 0.008 250);
   --muted: oklch(0.25 0.02 252);
   --muted-foreground: oklch(0.68 0.018 250);
-  --accent: oklch(0.3 0.03 190);
-  --accent-foreground: oklch(0.95 0.01 190);
+  --accent: oklch(0.32 0.03 178);
+  --accent-foreground: oklch(0.95 0.01 178);
   --destructive: oklch(0.62 0.21 22);
   --destructive-foreground: oklch(0.97 0.01 22);
-  --up: oklch(0.78 0.17 155);
+  --up: oklch(0.76 0.13 178);
   --down: oklch(0.65 0.21 22);
   --paused: oklch(0.8 0.15 85);
   --border: oklch(0.3 0.02 252);
   --input: oklch(0.3 0.02 252);
-  --ring: oklch(0.78 0.17 155);
+  --ring: oklch(0.76 0.13 178);
 }
 
 .dark {
   --background: oklch(0.17 0.018 250);
   --foreground: oklch(0.95 0.008 250);
+}
+
+/*
+ * Marketing pages (landing + auth): bright surfaces, black ink, toska accent —
+ * mirrors the logo (hitam + hijau toska). Scope tokens to the subtree so the
+ * dark "ops console" dashboard is untouched.
+ */
+.marketing {
+  --background: oklch(0.982 0.006 250);
+  --foreground: oklch(0.185 0.02 250);
+  --surface: oklch(0.955 0.008 250);
+  --surface-foreground: oklch(0.185 0.02 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.185 0.02 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.185 0.02 250);
+  --primary: oklch(0.58 0.12 178);
+  --primary-foreground: oklch(0.98 0.01 178);
+  --secondary: oklch(0.945 0.012 178);
+  --secondary-foreground: oklch(0.26 0.02 250);
+  --muted: oklch(0.952 0.008 250);
+  --muted-foreground: oklch(0.455 0.02 250);
+  --accent: oklch(0.945 0.02 178);
+  --accent-foreground: oklch(0.26 0.02 250);
+  --up: oklch(0.56 0.13 178);
+  --down: oklch(0.62 0.21 22);
+  --paused: oklch(0.7 0.15 85);
+  --border: oklch(0.905 0.012 250);
+  --input: oklch(0.905 0.012 250);
+  --ring: oklch(0.58 0.12 178);
+  --shadow-panel: 0 24px 60px -36px oklch(0.16 0.02 250 / 0.28);
+  --shadow-glow: 0 0 0 1px var(--border), 0 18px 50px -20px oklch(0.56 0.12 178 / 0.4);
+
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.marketing .text-gradient {
+  background-image: linear-gradient(
+    100deg,
+    oklch(0.185 0.02 250) 15%,
+    oklch(0.5 0.12 178) 55%,
+    oklch(0.55 0.13 178) 90%
+  );
+  background-clip: text;
+  color: transparent;
 }
 
 @layer base {
@@ -103,7 +149,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     background-image:
-      radial-gradient(60rem 40rem at 15% -10%, oklch(0.78 0.17 155 / 0.09), transparent 60%),
+      radial-gradient(60rem 40rem at 15% -10%, oklch(0.76 0.13 178 / 0.09), transparent 60%),
       radial-gradient(50rem 35rem at 95% 0%, oklch(0.6 0.13 230 / 0.1), transparent 60%);
     background-attachment: fixed;
   }

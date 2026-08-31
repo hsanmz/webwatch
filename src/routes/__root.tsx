@@ -86,6 +86,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/og.png" },
+      { property: "og:title", content: "WebWatch — Uptime Monitor with Telegram Alerts" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
@@ -96,6 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap",
       },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),

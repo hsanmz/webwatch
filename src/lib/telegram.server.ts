@@ -27,10 +27,7 @@ export async function sendTelegram(chatId: string, text: string) {
 }
 
 export function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export function humanDuration(ms: number) {
@@ -39,4 +36,62 @@ export function humanDuration(ms: number) {
   const minutes = totalMinutes % 60;
   if (hours === 0) return `${minutes} menit`;
   return `${hours} jam ${minutes} menit`;
+}
+
+function utcTimestamp(iso: string) {
+  return `${iso.replace("T", " ").slice(0, 19)} UTC`;
+}
+
+export function describeSslDaysLeft(daysLeft: number): string {
+  if (daysLeft <= 0) return "hari ini";
+  const ceil = Math.ceil(daysLeft);
+  return ceil <= 1 ? "1 hari" : `${ceil} hari`;
+}
+
+export function formatDownMessage(input: {
+  label: string;
+  url: string;
+  errorMessage: string;
+  failures: number;
+  at: string;
+}) {
+  return [
+    `🔴 <b>DOWN</b> — ${escapeHtml(input.label)}`,
+    `<code>${escapeHtml(input.url)}</code>`,
+    ``,
+    `Error: ${escapeHtml(input.errorMessage)}`,
+    `Gagal berturut-turut: ${input.failures}x`,
+    `Waktu: ${utcTimestamp(input.at)}`,
+  ].join("\n");
+}
+
+export function formatRecoveryMessage(input: {
+  label: string;
+  url: string;
+  downtime: string;
+  at: string;
+}) {
+  return [
+    `🟢 <b>RECOVERED</b> — ${escapeHtml(input.label)}`,
+    `<code>${escapeHtml(input.url)}</code>`,
+    ``,
+    `Durasi downtime: ${input.downtime}`,
+    `Pulih: ${utcTimestamp(input.at)}`,
+  ].join("\n");
+}
+
+export function formatSslWarningMessage(input: {
+  label: string;
+  url: string;
+  daysLeft: number;
+  at: string;
+}) {
+  return [
+    `⚠️ <b>SSL CERTIFICATE</b> — ${escapeHtml(input.label)}`,
+    `<code>${escapeHtml(input.url)}</code>`,
+    ``,
+    `Sertifikat SSL akan kedaluwarsa dalam ${describeSslDaysLeft(input.daysLeft)}.`,
+    `Perpanjang sertifikat sebelum habis.`,
+    `Waktu: ${utcTimestamp(input.at)}`,
+  ].join("\n");
 }

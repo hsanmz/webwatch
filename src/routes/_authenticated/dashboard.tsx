@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Activity, Loader2, Pause, Play, Plus, Send, Trash2 } from "lucide-react";
+import { Loader2, Pause, Play, Plus, Send, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { createTelegramLink } from "@/lib/telegram.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -50,7 +51,9 @@ function Dashboard() {
   const linkTelegram = useServerFn(createTelegramLink);
   const [url, setUrl] = useState("");
   const [minutes, setMinutes] = useState("5");
+  const [threshold, setThreshold] = useState("2");
   const [keyword, setKeyword] = useState("");
+  const [checkSsl, setCheckSsl] = useState(false);
 
   const sites = useQuery({
     queryKey: ["sites"],
@@ -69,7 +72,10 @@ function Dashboard() {
   const telegram = useQuery({
     queryKey: ["telegram-account"],
     queryFn: async () => {
-      const { data } = await supabase.from("telegram_accounts").select("chat_id,username").maybeSingle();
+      const { data } = await supabase
+        .from("telegram_accounts")
+        .select("chat_id,username")
+        .maybeSingle();
       return data;
     },
   });
@@ -84,13 +90,17 @@ function Dashboard() {
         url: full,
         name: parsed.hostname,
         interval_seconds: Math.max(1, Number(minutes) || 5) * 60,
+        fail_threshold: Math.max(1, Number(threshold) || 2),
         check_keyword: keyword.trim() || null,
+        check_ssl: checkSsl,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       setUrl("");
       setKeyword("");
+      setThreshold("2");
+      setCheckSsl(false);
       toast.success("Situs ditambahkan");
       queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
@@ -135,9 +145,12 @@ function Dashboard() {
     <div className="min-h-screen">
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2 text-primary">
-            <Activity className="h-5 w-5" />
-            <span className="font-display text-lg font-bold">WebWatch</span>
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="WebWatch" className="h-8 w-auto" />
+            <span className="font-display text-lg font-bold">
+              <span className="text-primary">Web</span>
+              <span className="text-foreground">Watch</span>
+            </span>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut}>
             Keluar
@@ -156,7 +169,11 @@ function Dashboard() {
             </p>
           </div>
           <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-            {connect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {connect.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             {telegram.data ? "Hubungkan ulang" : "Connect Telegram"}
           </Button>
         </section>
@@ -164,59 +181,80 @@ function Dashboard() {
         <section className="panel p-5">
           <h2 className="font-display text-base font-semibold">Tambah situs</h2>
           <form
-            className="mt-4 grid gap-4 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end"
+            className="mt-4 space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
               addSite.mutate();
             }}
           >
-            <div className="space-y-2">
-              <Label htmlFor="url">URL</Label>
-              <Input
-                id="url"
-                required
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://situsku.com"
-              />
+            <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
+              <div className="space-y-2">
+                <Label htmlFor="url">URL</Label>
+                <Input
+                  id="url"
+                  required
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://situsku.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="interval">Interval (menit)</Label>
+                <Input
+                  id="interval"
+                  type="number"
+                  min={1}
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="threshold">Gagal sebelum down</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  min={1}
+                  value={threshold}
+                  onChange={(e) => setThreshold(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="interval">Interval (menit)</Label>
-              <Input
-                id="interval"
-                type="number"
-                min={1}
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-              />
+            <div className="grid items-end gap-4 sm:grid-cols-[2fr_1fr_auto]">
+              <div className="space-y-2">
+                <Label htmlFor="keyword">Keyword (opsional)</Label>
+                <Input
+                  id="keyword"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="Login"
+                />
+              </div>
+              <div className="flex items-center gap-2 pb-2">
+                <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
+                <Label htmlFor="ssl" className="cursor-pointer">
+                  Cek sertifikat SSL
+                </Label>
+              </div>
+              <Button type="submit" disabled={addSite.isPending}>
+                <Plus className="h-4 w-4" />
+                Tambah
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="keyword">Keyword (opsional)</Label>
-              <Input
-                id="keyword"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Login"
-              />
-            </div>
-            <Button type="submit" disabled={addSite.isPending}>
-              <Plus className="h-4 w-4" />
-              Tambah
-            </Button>
           </form>
         </section>
 
         <section className="panel divide-y divide-border">
-          {sites.isLoading && (
-            <p className="p-5 text-sm text-muted-foreground">Memuat situs…</p>
-          )}
+          {sites.isLoading && <p className="p-5 text-sm text-muted-foreground">Memuat situs…</p>}
           {sites.data?.length === 0 && (
             <p className="p-5 text-sm text-muted-foreground">
               Belum ada situs yang dipantau. Tambahkan yang pertama di atas.
             </p>
           )}
           {sites.data?.map((site) => (
-            <article key={site.id} className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <article
+              key={site.id}
+              className="flex flex-wrap items-center justify-between gap-4 p-5"
+            >
               <div className="min-w-0">
                 <Link
                   to="/sites/$id"

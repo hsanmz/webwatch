@@ -1,8 +1,17 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { escapeHtml, humanDuration, sendTelegram } from "./telegram.server";
+import {
+  formatDownMessage,
+  formatRecoveryMessage,
+  formatSslWarningMessage,
+  humanDuration,
+  sendTelegram,
+} from "./telegram.server";
+import { evaluateStatus, isInCooldown, shouldWarnSsl } from "./monitor-core";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const NOTIFY_COOLDOWN_MS = 10 * 60 * 1000; // anti-flapping
+const SSL_WARN_THRESHOLD_DAYS = 7;
+const SSL_WARN_REPEAT_MS = 24 * 60 * 60 * 1000; // peringatan max 1x per hari per situs
 const MAX_SITES_PER_RUN = 60;
 
 export type ProbeResult = {
@@ -58,6 +67,58 @@ export async function probe(url: string, keyword: string | null): Promise<ProbeR
   }
 }
 
+// Best-effort SSL expiry inspection. Returns null when the runtime does not
+// support node:tls or the certificate could not be fetched — the check is
+// skipped instead of failing the site.
+async function checkSslExpiry(rawUrl: string): Promise<number | null> {
+  try {
+    const { connect } = await import("node:tls");
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname;
+    const port = parsed.port ? Number(parsed.port) : 443;
+
+    return await new Promise<number | null>((resolve) => {
+      let settled = false;
+      const finish = (value: number | null) => {
+        if (!settled) {
+          settled = true;
+          resolve(value);
+        }
+      };
+
+      const socket: import("node:tls").TLSSocket = connect({
+        host,
+        port,
+        servername: host,
+        rejectUnauthorized: false,
+      });
+      const timer = setTimeout(() => {
+        socket.destroy();
+        finish(null);
+      }, 5000);
+
+      socket.once("secureConnect", () => {
+        clearTimeout(timer);
+        const cert = socket.getPeerCertificate();
+        if (!cert || !cert.valid_to) {
+          socket.end();
+          finish(null);
+          return;
+        }
+        const daysLeft = (new Date(cert.valid_to).getTime() - Date.now()) / 86_400_000;
+        socket.end();
+        finish(daysLeft);
+      });
+      socket.once("error", () => {
+        clearTimeout(timer);
+        finish(null);
+      });
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function chatIdFor(userId: string): Promise<string | null> {
   const { data } = await supabaseAdmin
     .from("telegram_accounts")
@@ -75,58 +136,73 @@ type SiteRow = {
   interval_seconds: number;
   fail_threshold: number;
   check_keyword: string | null;
+  check_ssl: boolean;
   current_status: string;
   consecutive_failures: number;
   last_checked_at: string | null;
   last_notified_at: string | null;
+  ssl_last_warned_at: string | null;
 };
 
 export async function checkSite(site: SiteRow) {
   const result = await probe(site.url, site.check_keyword);
   const now = new Date();
-  const label = escapeHtml(site.name || site.url);
+  const nowMs = now.getTime();
+  const label = site.name || site.url;
+
+  let isUp = result.isUp;
+  let errorMessage = result.errorMessage;
+
+  let sslDaysLeft: number | null = null;
+  if (site.check_ssl) {
+    sslDaysLeft = await checkSslExpiry(site.url);
+    if (isUp && sslDaysLeft !== null && sslDaysLeft <= 0) {
+      isUp = false;
+      errorMessage = "Sertifikat SSL sudah kedaluwarsa";
+    }
+  }
 
   await supabaseAdmin.from("checks").insert({
     site_id: site.id,
     status_code: result.statusCode,
     response_time_ms: result.responseTimeMs,
-    is_up: result.isUp,
-    error_message: result.errorMessage,
+    is_up: isUp,
+    error_message: errorMessage,
   });
 
-  const cooldownActive =
-    site.last_notified_at != null &&
-    now.getTime() - new Date(site.last_notified_at).getTime() < NOTIFY_COOLDOWN_MS;
+  const evaluation = evaluateStatus({
+    currentStatus: site.current_status,
+    isUp,
+    consecutiveFailures: site.consecutive_failures,
+    failThreshold: site.fail_threshold,
+  });
 
-  let status = site.current_status;
-  let failures = result.isUp ? 0 : site.consecutive_failures + 1;
+  const cooldownActive = isInCooldown(site.last_notified_at, nowMs, NOTIFY_COOLDOWN_MS);
   let notified = false;
+  let sslWarned = false;
 
-  if (!result.isUp && failures >= site.fail_threshold && site.current_status !== "down") {
-    status = "down";
+  if (evaluation.becameDown) {
     await supabaseAdmin.from("incidents").insert({
       site_id: site.id,
-      error_message: result.errorMessage,
+      error_message: errorMessage,
     });
     if (!cooldownActive) {
       const chatId = await chatIdFor(site.user_id);
       if (chatId) {
         await sendTelegram(
           chatId,
-          [
-            `🔴 <b>DOWN</b> — ${label}`,
-            `<code>${escapeHtml(site.url)}</code>`,
-            ``,
-            `Error: ${escapeHtml(result.errorMessage ?? "unknown")}`,
-            `Gagal berturut-turut: ${failures}x`,
-            `Waktu: ${now.toISOString().replace("T", " ").slice(0, 19)} UTC`,
-          ].join("\n"),
+          formatDownMessage({
+            label,
+            url: site.url,
+            errorMessage: errorMessage ?? "unknown",
+            failures: evaluation.consecutiveFailures,
+            at: now.toISOString(),
+          }),
         );
         notified = true;
       }
     }
-  } else if (result.isUp && site.current_status === "down") {
-    status = "up";
+  } else if (evaluation.becameUp) {
     const { data: incident } = await supabaseAdmin
       .from("incidents")
       .select("id, started_at")
@@ -138,7 +214,7 @@ export async function checkSite(site: SiteRow) {
 
     let downtime = "tidak diketahui";
     if (incident) {
-      downtime = humanDuration(now.getTime() - new Date(incident.started_at).getTime());
+      downtime = humanDuration(nowMs - new Date(incident.started_at).getTime());
       await supabaseAdmin
         .from("incidents")
         .update({ resolved_at: now.toISOString() })
@@ -150,39 +226,58 @@ export async function checkSite(site: SiteRow) {
       if (chatId) {
         await sendTelegram(
           chatId,
-          [
-            `🟢 <b>RECOVERED</b> — ${label}`,
-            `<code>${escapeHtml(site.url)}</code>`,
-            ``,
-            `Durasi downtime: ${downtime}`,
-            `Pulih: ${now.toISOString().replace("T", " ").slice(0, 19)} UTC`,
-          ].join("\n"),
+          formatRecoveryMessage({ label, url: site.url, downtime, at: now.toISOString() }),
         );
         notified = true;
       }
     }
-  } else if (result.isUp) {
-    status = "up";
+  }
+
+  if (
+    isUp &&
+    sslDaysLeft !== null &&
+    shouldWarnSsl({
+      daysLeft: sslDaysLeft,
+      lastWarnedAt: site.ssl_last_warned_at,
+      now: nowMs,
+      warnThresholdDays: SSL_WARN_THRESHOLD_DAYS,
+      repeatAfterMs: SSL_WARN_REPEAT_MS,
+    })
+  ) {
+    const chatId = await chatIdFor(site.user_id);
+    if (chatId) {
+      await sendTelegram(
+        chatId,
+        formatSslWarningMessage({
+          label,
+          url: site.url,
+          daysLeft: sslDaysLeft,
+          at: now.toISOString(),
+        }),
+      );
+      sslWarned = true;
+    }
   }
 
   await supabaseAdmin
     .from("sites")
     .update({
-      current_status: status,
-      consecutive_failures: failures,
+      current_status: evaluation.status,
+      consecutive_failures: evaluation.consecutiveFailures,
       last_checked_at: now.toISOString(),
       ...(notified ? { last_notified_at: now.toISOString() } : {}),
+      ...(sslWarned ? { ssl_last_warned_at: now.toISOString() } : {}),
     })
     .eq("id", site.id);
 
-  return { siteId: site.id, up: result.isUp, status };
+  return { siteId: site.id, up: isUp, status: evaluation.status };
 }
 
 export async function runDueChecks() {
   const { data: sites, error } = await supabaseAdmin
     .from("sites")
     .select(
-      "id,user_id,name,url,interval_seconds,fail_threshold,check_keyword,current_status,consecutive_failures,last_checked_at,last_notified_at",
+      "id,user_id,name,url,interval_seconds,fail_threshold,check_keyword,check_ssl,current_status,consecutive_failures,last_checked_at,last_notified_at,ssl_last_warned_at",
     )
     .eq("is_active", true)
     .order("last_checked_at", { ascending: true, nullsFirst: true })
@@ -210,5 +305,9 @@ export async function runDueChecks() {
 export async function purgeOldData() {
   const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
   await supabaseAdmin.from("checks").delete().lt("checked_at", cutoff);
-  await supabaseAdmin.from("incidents").delete().lt("started_at", cutoff).not("resolved_at", "is", null);
+  await supabaseAdmin
+    .from("incidents")
+    .delete()
+    .lt("started_at", cutoff)
+    .not("resolved_at", "is", null);
 }
