@@ -1,16 +1,17 @@
 # WebWatch APM & Uptime Monitoring
 
-WebWatch adalah aplikasi pemantauan website generasi baru (seperti Sentry/Datadog) yang mendukung **Application Performance Monitoring (APM)** via SDK dan **Uptime Monitoring** dari luar. Dilengkapi dengan notifikasi Telegram *real-time*!
+WebWatch adalah aplikasi pemantauan website generasi baru (seperti Sentry/Datadog) yang mendukung **Application Performance Monitoring (APM)** via SDK dan **Uptime Monitoring** dari luar. Dilengkapi dengan notifikasi Telegram _real-time_!
 
 ## Fitur Unggulan
 
-- **Application Performance Monitoring (APM)** — Tangkap log dan error (Frontend & Backend) dari dalam aplikasi menggunakan WebWatch SDK via CDN (Tanpa `npm install`).
+- **Application Performance Monitoring (APM)** — Tangkap log dan error (Frontend & Backend) dari dalam aplikasi menggunakan WebWatch SDK (via NPM `@webwatch/sdk` atau CDN).
+- **Public Status Page & Docs** — Halaman status sistem publik terintegrasi dan dokumentasi interaktif yang rapi dengan Framer Motion.
 - **Validasi Kepemilikan Domain** — Sistem verifikasi keamanan via file `webwatch-verify.txt`.
-- **API Keys & Ingestion Server** — Server *ingest* *batch-processing* yang aman (Bearer token) dan *scalable* untuk menangkap ribuan event.
+- **API Keys & Ingestion Server** — Server _ingest_ _batch-processing_ yang aman (Bearer token) dan _scalable_ untuk menangkap ribuan event.
 - **Pemantauan Uptime Aktif** — Cek HTTP dari luar tiap menit menggunakan Cloudflare Cron Trigger.
 - **Alert Telegram Instan** — Notifikasi saat SDK menangkap error kritis, atau saat server mati (DOWN/RECOVERED).
-- **Login OTP Telegram** — Keamanan tanpa *password*, menggunakan verifikasi chat bot Telegram.
-- **Multi-user** — Isolasi data penuh per pengguna di atas *database* Cloudflare D1.
+- **Login OTP Telegram** — Keamanan tanpa _password_, menggunakan verifikasi chat bot Telegram.
+- **Multi-user** — Isolasi data penuh per pengguna di atas _database_ Cloudflare D1.
 
 ## Tech stack
 
@@ -21,14 +22,18 @@ WebWatch adalah aplikasi pemantauan website generasi baru (seperti Sentry/Datado
 | Database & Auth | Cloudflare D1 (SQLite) — session cookie + OTP via Telegram |
 | Scheduler       | Cloudflare Cron Trigger (`* * * * *`)                      |
 | Hosting         | Cloudflare Workers via Nitro (preset `cloudflare-module`)  |
-| Tooling         | Bun, TypeScript, Vite, Vitest, Tailwind CSS                |
+| Tooling         | Bun, TypeScript, Vite, Vitest, Tailwind CSS, Framer Motion |
 
 ## Arsitektur singkat
 
 ```
+packages/
+└── webwatch-sdk/                  # NPM package SDK untuk Node.js & Browser
 src/
 ├── routes/
 │   ├── index.tsx                  # Landing page
+│   ├── docs.tsx                   # Halaman Dokumentasi interaktif
+│   ├── status.tsx                 # Halaman Public Status
 │   ├── auth.tsx                   # Login OTP via Telegram (email → link bot → kode)
 │   ├── _authenticated/
 │   │   ├── route.tsx              # Guard: cek session cookie
@@ -37,8 +42,10 @@ src/
 │   └── api/
 │       ├── auth/{otp,link-status,verify,me,logout}.ts
 │       ├── sites.ts / sites/detail.ts   # CRUD situs (auth cookie)
+│       ├── system-status.ts       # Endpoint data public status page
 │       └── public/
 │           ├── telegram/webhook.ts      # Webhook bot Telegram
+│           ├── sdk.ts                   # Ingestion endpoint untuk SDK CDN/NPM
 │           └── cron/run.ts              # Trigger manual monitor (rahasia)
 ├── lib/
 │   ├── monitor-core.ts            # Logika murni: evaluasi status, cooldown, SSL (dites)
@@ -46,7 +53,7 @@ src/
 │   ├── bot.server.ts              # Handler command bot Telegram (D1)
 │   ├── auth.server.ts             # OTP, session, cookie, hash
 │   ├── auth-flows.server.ts       # Handler endpoint auth
-│   ├── sites-api.server.ts        # CRUD situs
+│   ├── sites-api.server.ts        # CRUD situs (Global unique URL)
 │   ├── wrangler-env.ts            # Akses binding (env.DB) dari route handler
 │   ├── monitor-cron.ts            # Daftarkan monitor ke event `scheduled` CF
 │   └── telegram.server.ts         # Formatter pesan + kirim via Bot API
@@ -155,7 +162,8 @@ bun run test
 
 - Fase 1 (selesai): auth OTP, kelola situs, monitoring dasar, notifikasi down/recovered.
 - Fase 2 (selesai): dashboard statistik, keyword check, SSL check, anti-flapping, grafik 24h/7d/30d, migrasi Supabase → D1.
-- Fase 3 (opsional): channel notifikasi tambahan, status page publik, multi-region check.
+- Fase 3 (selesai): WebWatch SDK (NPM & CDN), halaman dokumen (Docs), status page publik.
+- Fase 4 (opsional): channel notifikasi tambahan, multi-region check.
 
 ---
 
