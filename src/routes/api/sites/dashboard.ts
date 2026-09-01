@@ -16,7 +16,7 @@ export const Route = createFileRoute("/api/sites/dashboard")({
                FROM apm_events e
                JOIN sites s ON e.site_id = s.id
                WHERE s.user_id = ?
-               ORDER BY e.created_at DESC LIMIT 15`
+               ORDER BY e.created_at DESC LIMIT 15`,
             )
             .bind(user.id)
             .all();
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/api/sites/dashboard")({
                FROM incidents i
                JOIN sites s ON i.site_id = s.id
                WHERE s.user_id = ?
-               ORDER BY i.started_at DESC LIMIT 15`
+               ORDER BY i.started_at DESC LIMIT 15`,
             )
             .bind(user.id)
             .all();

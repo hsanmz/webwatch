@@ -26,12 +26,13 @@ export const Route = createFileRoute("/api/system-status")({
           const lastCheck = await d1
             .prepare("SELECT checked_at FROM checks ORDER BY checked_at DESC LIMIT 1")
             .first<{ checked_at: string }>();
-          
+
           let workerStatus = "operational";
           if (lastCheck && lastCheck.checked_at) {
             const lastCheckTime = new Date(lastCheck.checked_at).getTime();
             const now = Date.now();
-            if (now - lastCheckTime > 10 * 60 * 1000) { // 10 menit mati
+            if (now - lastCheckTime > 10 * 60 * 1000) {
+              // 10 menit mati
               workerStatus = "outage";
             }
           }
@@ -41,10 +42,26 @@ export const Route = createFileRoute("/api/system-status")({
           return Response.json({
             status: platformStatus,
             components: [
-              { name: "Web Dashboard & API", status: "operational", description: "Layanan antarmuka pengguna dan core API" },
-              { name: "Uptime Monitoring Engine", status: workerStatus, description: "Edge workers untuk ping periodik situs pengguna" },
-              { name: "APM Ingestion Nodes", status: "operational", description: "Penerima log error dari aplikasi pengguna" },
-              { name: "Database & Storage", status: "operational", description: "Penyimpanan data inti dan konfigurasi" }
+              {
+                name: "Web Dashboard & API",
+                status: "operational",
+                description: "Layanan antarmuka pengguna dan core API",
+              },
+              {
+                name: "Uptime Monitoring Engine",
+                status: workerStatus,
+                description: "Edge workers untuk ping periodik situs pengguna",
+              },
+              {
+                name: "APM Ingestion Nodes",
+                status: "operational",
+                description: "Penerima log error dari aplikasi pengguna",
+              },
+              {
+                name: "Database & Storage",
+                status: "operational",
+                description: "Penyimpanan data inti dan konfigurasi",
+              },
             ],
             metrics: {
               totalSites: sitesRes?.count || 0,
@@ -58,10 +75,26 @@ export const Route = createFileRoute("/api/system-status")({
             {
               status: "outage",
               components: [
-                { name: "Web Dashboard & API", status: "outage", description: "Layanan antarmuka pengguna dan core API" },
-                { name: "Uptime Monitoring Engine", status: "unknown", description: "Edge workers untuk ping periodik situs pengguna" },
-                { name: "APM Ingestion Nodes", status: "unknown", description: "Penerima log error dari aplikasi pengguna" },
-                { name: "Database & Storage", status: "outage", description: "Penyimpanan data inti dan konfigurasi" }
+                {
+                  name: "Web Dashboard & API",
+                  status: "outage",
+                  description: "Layanan antarmuka pengguna dan core API",
+                },
+                {
+                  name: "Uptime Monitoring Engine",
+                  status: "unknown",
+                  description: "Edge workers untuk ping periodik situs pengguna",
+                },
+                {
+                  name: "APM Ingestion Nodes",
+                  status: "unknown",
+                  description: "Penerima log error dari aplikasi pengguna",
+                },
+                {
+                  name: "Database & Storage",
+                  status: "outage",
+                  description: "Penyimpanan data inti dan konfigurasi",
+                },
               ],
               metrics: { totalSites: 0, apmEvents24h: 0, checks24h: 0 },
               error: String(error),

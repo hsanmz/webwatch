@@ -61,7 +61,9 @@ function Incidents() {
           <ul className="space-y-4">
             {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
             {statsData?.incidents.length === 0 && (
-              <li className="text-sm text-muted-foreground">Tidak ada riwayat gangguan tercatat.</li>
+              <li className="text-sm text-muted-foreground">
+                Tidak ada riwayat gangguan tercatat.
+              </li>
             )}
             {statsData?.incidents.map((inc) => (
               <li
@@ -70,7 +72,10 @@ function Incidents() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Link to={`/sites/${inc.site_id}`} className="text-sm font-semibold hover:underline">
+                    <Link
+                      to={`/sites/${inc.site_id}`}
+                      className="text-sm font-semibold hover:underline"
+                    >
                       {inc.site_name}
                     </Link>
                     {inc.resolved_at ? (

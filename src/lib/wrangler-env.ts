@@ -19,7 +19,7 @@ export function setAppEnv(env: unknown): void {
 
 export function getAppEnv(): AppEnv {
   if (currentEnv) return currentEnv;
-  
+
   try {
     const req = getRequest() as any;
     const env = req?.runtime?.cloudflare?.env ?? req?.cf?.env;

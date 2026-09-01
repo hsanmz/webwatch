@@ -61,7 +61,9 @@ function ApmIssues() {
           <ul className="space-y-4">
             {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
             {statsData?.events.length === 0 && (
-              <li className="text-sm text-muted-foreground">Belum ada error atau log dari situs manapun.</li>
+              <li className="text-sm text-muted-foreground">
+                Belum ada error atau log dari situs manapun.
+              </li>
             )}
             {statsData?.events.map((ev) => (
               <li
@@ -70,7 +72,10 @@ function ApmIssues() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Link to={`/sites/${ev.site_id}`} className="text-sm font-semibold hover:underline">
+                    <Link
+                      to={`/sites/${ev.site_id}`}
+                      className="text-sm font-semibold hover:underline"
+                    >
                       {ev.site_name}
                     </Link>
                     <span

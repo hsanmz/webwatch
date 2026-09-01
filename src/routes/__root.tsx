@@ -131,28 +131,34 @@ function GlobalSystemStatus() {
   });
 
   const status = isError ? "outage" : data?.status || "operational";
-  
-  const color = 
-    status === "operational" ? "bg-emerald-500" :
-    status === "degraded" ? "bg-yellow-500" : 
-    "bg-red-500";
-    
+
+  const color =
+    status === "operational"
+      ? "bg-emerald-500"
+      : status === "degraded"
+        ? "bg-yellow-500"
+        : "bg-red-500";
+
   const text =
-    status === "operational" ? "All Systems Operational" :
-    status === "degraded" ? "Degraded System Performance" : 
-    "Major System Outage";
+    status === "operational"
+      ? "All Systems Operational"
+      : status === "degraded"
+        ? "Degraded System Performance"
+        : "Major System Outage";
 
   if (isLoading) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999]">
-      <Link 
-        to="/status" 
+      <Link
+        to="/status"
         className="flex items-center gap-2.5 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 text-xs font-medium font-mono text-muted-foreground shadow-lg hover:text-foreground hover:shadow-xl transition-all"
       >
         <span className="relative flex h-2 w-2">
           {status === "operational" && (
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}></span>
+            <span
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}
+            ></span>
           )}
           <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`}></span>
         </span>

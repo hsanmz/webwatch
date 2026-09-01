@@ -1,7 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { AlertTriangle, CheckCircle2, PauseCircle, Server, Activity, History, ArrowRight } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  PauseCircle,
+  Server,
+  Activity,
+  History,
+  ArrowRight,
+} from "lucide-react";
 
 import { api, type ApiSite } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -175,7 +183,9 @@ function Dashboard() {
               <ul className="space-y-3">
                 {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
                 {statsData?.events.length === 0 && (
-                  <li className="text-sm text-muted-foreground">Sistem stabil, tidak ada error tercatat.</li>
+                  <li className="text-sm text-muted-foreground">
+                    Sistem stabil, tidak ada error tercatat.
+                  </li>
                 )}
                 {statsData?.events.slice(0, 5).map((ev) => (
                   <li
@@ -189,7 +199,10 @@ function Dashboard() {
                         >
                           {ev.event_type}
                         </span>
-                        <Link to={`/sites/${ev.site_id}`} className="text-xs font-semibold hover:underline truncate">
+                        <Link
+                          to={`/sites/${ev.site_id}`}
+                          className="text-xs font-semibold hover:underline truncate"
+                        >
                           {ev.site_name}
                         </Link>
                       </div>
@@ -197,7 +210,9 @@ function Dashboard() {
                         {new Date(ev.created_at).toLocaleTimeString()}
                       </span>
                     </div>
-                    <p className="text-sm truncate" title={ev.message}>{ev.message}</p>
+                    <p className="text-sm truncate" title={ev.message}>
+                      {ev.message}
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -221,7 +236,9 @@ function Dashboard() {
               <ul className="space-y-3">
                 {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
                 {statsData?.incidents.length === 0 && (
-                  <li className="text-sm text-muted-foreground">Sistem stabil, tidak ada downtime tercatat.</li>
+                  <li className="text-sm text-muted-foreground">
+                    Sistem stabil, tidak ada downtime tercatat.
+                  </li>
                 )}
                 {statsData?.incidents.slice(0, 5).map((inc) => (
                   <li
@@ -230,7 +247,10 @@ function Dashboard() {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <Link to={`/sites/${inc.site_id}`} className="text-xs font-semibold hover:underline">
+                        <Link
+                          to={`/sites/${inc.site_id}`}
+                          className="text-xs font-semibold hover:underline"
+                        >
                           {inc.site_name}
                         </Link>
                         {inc.resolved_at ? (
@@ -247,7 +267,10 @@ function Dashboard() {
                         {new Date(inc.started_at).toLocaleTimeString()}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate" title={inc.error_message || "Koneksi gagal"}>
+                    <p
+                      className="text-sm text-muted-foreground truncate"
+                      title={inc.error_message || "Koneksi gagal"}
+                    >
                       {inc.error_message || "Koneksi gagal atau timeout"}
                     </p>
                   </li>
