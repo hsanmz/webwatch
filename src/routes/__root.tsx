@@ -145,25 +145,20 @@ function GlobalSystemStatus() {
   if (isLoading) return null;
 
   return (
-    <footer className="border-t border-border bg-background py-4 mt-auto">
-      <div className="mx-auto max-w-6xl px-4 flex items-center justify-between text-xs text-muted-foreground">
-        <div>
-          &copy; {new Date().getFullYear()} WebWatch. All rights reserved.
-        </div>
-        <Link 
-          to="/status" 
-          className="inline-flex items-center gap-2 font-mono hover:text-foreground transition-colors"
-        >
-          <span className="relative flex h-2 w-2">
-            {status === "operational" && (
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}></span>
-            )}
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`}></span>
-          </span>
-          {text}
-        </Link>
-      </div>
-    </footer>
+    <div className="fixed bottom-4 right-4 z-[100]">
+      <Link 
+        to="/status" 
+        className="flex items-center gap-2.5 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 text-xs font-medium font-mono text-muted-foreground shadow-lg hover:text-foreground hover:shadow-xl transition-all"
+      >
+        <span className="relative flex h-2 w-2">
+          {status === "operational" && (
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}></span>
+          )}
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`}></span>
+        </span>
+        {text}
+      </Link>
+    </div>
   );
 }
 
@@ -172,13 +167,8 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex min-h-screen flex-col">
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <div className="flex-1">
-          <Outlet />
-        </div>
-        <GlobalSystemStatus />
-      </div>
+      <Outlet />
+      <GlobalSystemStatus />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );
