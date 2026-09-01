@@ -1,48 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Loader2, PauseCircle, Plus, Server } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { AlertTriangle, CheckCircle2, PauseCircle, Server, Activity, History, ArrowRight } from "lucide-react";
 
 import { api, type ApiSite } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard } from "@/components/app/stat-card";
-import { SiteCard } from "@/components/app/site-card";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
-
-type UrlCheck = { ok: boolean; message: string | null };
-
-function validateUrl(raw: string): UrlCheck {
-  const value = raw.trim();
-  if (!value) return { ok: false, message: "URL wajib diisi." };
-  const normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
-  let parsed: URL;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    return { ok: false, message: "Format URL tidak valid." };
-  }
-  if (!parsed.hostname.includes(".")) {
-    return { ok: false, message: "Format URL tidak valid masukkan domain yang benar." };
-  }
-  return { ok: true, message: null };
-}
 
 function useSites() {
   return useQuery({
@@ -54,97 +23,44 @@ function useSites() {
   });
 }
 
+type ApmEventRow = {
+  id: string;
+  environment: string;
+  event_type: string;
+  message: string;
+  stack_trace: string | null;
+  url: string | null;
+  method: string | null;
+  user_agent: string | null;
+  created_at: string;
+  site_name: string;
+  site_id: string;
+};
+
+type IncidentRow = {
+  id: string;
+  started_at: string;
+  resolved_at: string | null;
+  error_message: string | null;
+  site_name: string;
+  site_id: string;
+};
+
+function useDashboardStats() {
+  return useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: async () => {
+      return api<{ events: ApmEventRow[]; incidents: IncidentRow[] }>("/api/sites/dashboard");
+    },
+  });
+}
+
 function Dashboard() {
-  const queryClient = useQueryClient();
-  const [openAdd, setOpenAdd] = useState(false);
-  const [url, setUrl] = useState("");
-  const [minutes, setMinutes] = useState("5");
-  const [threshold, setThreshold] = useState("2");
-  const [keyword, setKeyword] = useState("");
-  const [checkSsl, setCheckSsl] = useState(false);
-  const [urlError, setUrlError] = useState<string | null>(null);
-
-  const urlCheck = useMemo(() => validateUrl(url), [url]);
-
   const { data: user } = useCurrentUser();
   const { data: sitesData, isPending } = useSites();
+  const { data: statsData, isPending: statsPending } = useDashboardStats();
 
   const connected = user?.chat_id != null;
-
-  const addSite = useMutation({
-    mutationFn: () => {
-      if (!urlCheck.ok) {
-        setUrlError(urlCheck.message);
-        throw new Error(urlCheck.message ?? "URL tidak valid");
-      }
-      return api<{ ok: boolean }>("/api/sites", {
-        method: "POST",
-        body: JSON.stringify({
-          url: url.trim(),
-          intervalMinutes: Math.max(1, Number(minutes) || 5),
-          failThreshold: Math.max(1, Number(threshold) || 2),
-          keyword: keyword.trim() || null,
-          ssl: checkSsl,
-        }),
-      });
-    },
-    onSuccess: () => {
-      setUrl("");
-      setKeyword("");
-      setThreshold("2");
-      setCheckSsl(false);
-      setUrlError(null);
-      setOpenAdd(false);
-      toast.success("Situs ditambahkan");
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-    onError: (error: Error) => {
-      if (error.message === "url_taken") {
-        setUrlError("URL sudah dipantau oleh akun lain. Pilih URL lain.");
-        return;
-      }
-      toast.error(error.message);
-    },
-  });
-
-  const toggleSite = useMutation({
-    mutationFn: async (site: ApiSite) =>
-      api<{ ok: boolean }>("/api/sites", {
-        method: "PATCH",
-        body: JSON.stringify({ id: site.id, is_active: !site.is_active }),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sites"] }),
-  });
-
-  const verifySite = useMutation({
-    mutationFn: async (id: string) =>
-      api<{ ok: boolean; status?: string }>("/api/sites/verify", {
-        method: "POST",
-        body: JSON.stringify({ id }),
-      }),
-    onSuccess: () => {
-      toast.success("Verifikasi berhasil!");
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-    onError: (error: Error) => {
-      toast.error(
-        error.message === "token_mismatch"
-          ? "Token tidak sesuai"
-          : error.message === "file_not_found"
-            ? "File webwatch-verify.txt tidak ditemukan"
-            : error.message,
-      );
-    },
-  });
-
-  const removeSite = useMutation({
-    mutationFn: async (id: string) =>
-      api<{ ok: boolean }>("/api/sites", { method: "DELETE", body: JSON.stringify({ id }) }),
-    onSuccess: () => {
-      toast.success("Situs dihapus");
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-  });
 
   const stats = useMemo(() => {
     const list = sitesData ?? [];
@@ -179,117 +95,23 @@ function Dashboard() {
       )}
 
       <PageHeader
-        eyebrow="Monitoring"
-        title="Proyek Pemantauan"
-        description="Kelola semua website yang sedang dipantau."
+        eyebrow="Overview"
+        title="Sistem Monitoring"
+        description="Ringkasan ketersediaan sistem dan log aplikasi Anda."
         actions={
-          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Tambah Situs
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[550px]">
-              <DialogHeader>
-                <DialogTitle>Tambah Situs Baru</DialogTitle>
-                <DialogDescription>
-                  Masukkan URL dan atur konfigurasi pemantauan. Kami akan mengeceknya secara
-                  berkala.
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                className="mt-2 space-y-5"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setUrlError(urlCheck.ok ? null : urlCheck.message);
-                  if (urlCheck.ok) addSite.mutate();
-                }}
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="url">URL Lengkap</Label>
-                  <Input
-                    id="url"
-                    required
-                    value={url}
-                    onChange={(e) => {
-                      setUrl(e.target.value);
-                      setUrlError(null);
-                    }}
-                    placeholder="https://situsku.com"
-                    aria-invalid={!!urlError}
-                  />
-                  {urlError ? (
-                    <p className="text-xs font-medium text-[var(--down)]">{urlError}</p>
-                  ) : (
-                    url.trim() !== "" &&
-                    urlCheck.ok && (
-                      <p className="text-xs text-muted-foreground">
-                        Akan dipantau sebagai{" "}
-                        <code className="rounded bg-muted px-1 py-0.5">
-                          {/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`}
-                        </code>
-                      </p>
-                    )
-                  )}
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="interval">Interval (menit)</Label>
-                    <Input
-                      id="interval"
-                      type="number"
-                      min={1}
-                      value={minutes}
-                      onChange={(e) => setMinutes(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="threshold">Toleransi Gagal (x)</Label>
-                    <Input
-                      id="threshold"
-                      type="number"
-                      min={1}
-                      value={threshold}
-                      onChange={(e) => setThreshold(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="keyword">Pengecekan Keyword (opsional)</Label>
-                  <Input
-                    id="keyword"
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    placeholder="Contoh: Login"
-                  />
-                </div>
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-card/50 p-4">
-                  <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="ssl" className="cursor-pointer font-semibold">
-                      Pantau Sertifikat SSL
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Kirim peringatan jika SSL akan kedaluwarsa (&lt; 7 hari).
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-end pt-2">
-                  <Button
-                    type="submit"
-                    disabled={addSite.isPending || (url.trim() !== "" && !urlCheck.ok)}
-                  >
-                    {addSite.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Simpan & Pantau
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button asChild variant="outline">
+            <Link to="/monitors">Kelola Situs</Link>
+          </Button>
         }
       />
 
-      {sitesData && sitesData.length > 0 && (
+      {isPending ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="panel p-5 h-[104px] bg-muted/50" />
+          ))}
+        </div>
+      ) : (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Server} label="Total Situs" value={stats.total} sub="terdaftar" />
           <StatCard
@@ -316,68 +138,124 @@ function Dashboard() {
         </section>
       )}
 
-      {isPending ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="panel animate-pulse p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="h-5 w-3/4 rounded bg-muted" />
-                  <div className="mt-2 h-3 w-1/2 rounded bg-muted" />
-                </div>
-                <div className="h-5 w-20 rounded-full bg-muted" />
-              </div>
-              <div className="mt-6 flex gap-5">
-                <div className="h-3 w-16 rounded bg-muted" />
-                <div className="h-3 w-24 rounded bg-muted" />
-              </div>
-              <div className="mt-6 border-t border-border/60 pt-4">
-                <div className="h-8 w-24 rounded bg-muted" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (sitesData ?? []).length === 0 ? (
-        <div className="panel flex min-h-[320px] flex-col items-center justify-center px-4 text-center">
+      {sitesData && sitesData.length === 0 && !isPending && (
+        <div className="panel flex min-h-[250px] flex-col items-center justify-center px-4 text-center mt-6">
           <div className="relative mb-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
               <Server className="h-7 w-7 text-primary" />
             </div>
             <span className="live-dot absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-background bg-[var(--up)]" />
           </div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Mulai Pantau
-          </p>
           <h3 className="mt-1.5 font-display text-lg font-semibold">Belum ada situs dipantau</h3>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Tambahkan website pertama kamu untuk mulai memantau uptime dan mendapatkan alert
-            Telegram secara real-time.
+            Sistem belum memiliki data. Mulai tambahkan website di halaman Monitors.
           </p>
-          <Button className="mt-6" onClick={() => setOpenAdd(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Tambah Situs Pertama
+          <Button asChild className="mt-6">
+            <Link to="/monitors">Ke Halaman Monitors</Link>
           </Button>
         </div>
-      ) : (
-        <>
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-semibold">Situs Kamu</h2>
-            <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              {stats.total} terdaftar
-            </span>
-          </div>
-          <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {sitesData?.map((site) => (
-              <SiteCard
-                key={site.id}
-                site={site}
-                verifyPending={verifySite.isPending}
-                onVerify={(id) => verifySite.mutate(id)}
-                onToggle={(s) => toggleSite.mutate(s)}
-                onRemove={(s) => removeSite.mutate(s.id)}
-              />
-            ))}
+      )}
+
+      {(sitesData ?? []).length > 0 && (
+        <div className="mt-2 grid gap-6 lg:grid-cols-2">
+          {/* Recent APM Events */}
+          <section className="panel p-5 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <h2 className="font-display text-base font-semibold">Top Exceptions</h2>
+              </div>
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/apm">
+                  Semua Log <ArrowRight className="ml-1 h-3 w-3" />
+                </Link>
+              </Button>
+            </div>
+            <div className="mt-2 flex-1">
+              <ul className="space-y-3">
+                {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
+                {statsData?.events.length === 0 && (
+                  <li className="text-sm text-muted-foreground">Sistem stabil, tidak ada error tercatat.</li>
+                )}
+                {statsData?.events.slice(0, 5).map((ev) => (
+                  <li
+                    key={ev.id}
+                    className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 truncate">
+                        <span
+                          className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-widest ${ev.event_type.includes("error") ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}
+                        >
+                          {ev.event_type}
+                        </span>
+                        <Link to={`/sites/${ev.site_id}`} className="text-xs font-semibold hover:underline truncate">
+                          {ev.site_name}
+                        </Link>
+                      </div>
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                        {new Date(ev.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-sm truncate" title={ev.message}>{ev.message}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
-        </>
+
+          {/* Recent Incidents */}
+          <section className="panel p-5 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-destructive" />
+                <h2 className="font-display text-base font-semibold">Active Incidents</h2>
+              </div>
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/incidents">
+                  Semua Insiden <ArrowRight className="ml-1 h-3 w-3" />
+                </Link>
+              </Button>
+            </div>
+            <div className="mt-2 flex-1">
+              <ul className="space-y-3">
+                {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
+                {statsData?.incidents.length === 0 && (
+                  <li className="text-sm text-muted-foreground">Sistem stabil, tidak ada downtime tercatat.</li>
+                )}
+                {statsData?.incidents.slice(0, 5).map((inc) => (
+                  <li
+                    key={inc.id}
+                    className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Link to={`/sites/${inc.site_id}`} className="text-xs font-semibold hover:underline">
+                          {inc.site_name}
+                        </Link>
+                        {inc.resolved_at ? (
+                          <span className="bg-[var(--up)]/10 text-[var(--up)] px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-widest">
+                            Resolved
+                          </span>
+                        ) : (
+                          <span className="bg-[var(--down)]/10 text-[var(--down)] px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-widest animate-pulse">
+                            Ongoing
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(inc.started_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground truncate" title={inc.error_message || "Koneksi gagal"}>
+                      {inc.error_message || "Koneksi gagal atau timeout"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </div>
       )}
     </>
   );

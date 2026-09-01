@@ -145,7 +145,7 @@ function GlobalSystemStatus() {
   if (isLoading) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100]">
+    <div className="fixed bottom-4 right-4 z-[9999]">
       <Link 
         to="/status" 
         className="flex items-center gap-2.5 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 text-xs font-medium font-mono text-muted-foreground shadow-lg hover:text-foreground hover:shadow-xl transition-all"

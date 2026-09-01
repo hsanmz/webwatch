@@ -14,7 +14,10 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as StatusRouteImport } from './routes/status'
+import { Route as AuthenticatedApmRouteImport } from './routes/_authenticated/apm'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedIncidentsRouteImport } from './routes/_authenticated/incidents'
+import { Route as AuthenticatedMonitorsRouteImport } from './routes/_authenticated/monitors'
 import { Route as ApiIngestRouteImport } from './routes/api/ingest'
 import { Route as ApiSitesRouteImport } from './routes/api/sites'
 import { Route as ApiSystemStatusRouteImport } from './routes/api/system-status'
@@ -25,6 +28,7 @@ import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthOtpRouteImport } from './routes/api/auth/otp'
 import { Route as ApiAuthVerifyRouteImport } from './routes/api/auth/verify'
 import { Route as ApiPublicSdkRouteImport } from './routes/api/public/sdk'
+import { Route as ApiSitesDashboardRouteImport } from './routes/api/sites/dashboard'
 import { Route as ApiSitesDetailRouteImport } from './routes/api/sites/detail'
 import { Route as ApiSitesEventsRouteImport } from './routes/api/sites/events'
 import { Route as ApiSitesKeysRouteImport } from './routes/api/sites/keys'
@@ -56,9 +60,24 @@ const StatusRoute = StatusRouteImport.update({
   path: '/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedApmRoute = AuthenticatedApmRouteImport.update({
+  id: '/apm',
+  path: '/apm',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedIncidentsRoute = AuthenticatedIncidentsRouteImport.update({
+  id: '/incidents',
+  path: '/incidents',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMonitorsRoute = AuthenticatedMonitorsRouteImport.update({
+  id: '/monitors',
+  path: '/monitors',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiIngestRoute = ApiIngestRouteImport.update({
@@ -111,6 +130,11 @@ const ApiPublicSdkRoute = ApiPublicSdkRouteImport.update({
   path: '/api/public/sdk',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSitesDashboardRoute = ApiSitesDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => ApiSitesRoute,
+} as any)
 const ApiSitesDetailRoute = ApiSitesDetailRouteImport.update({
   id: '/detail',
   path: '/detail',
@@ -148,7 +172,10 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/status': typeof StatusRoute
+  '/apm': typeof AuthenticatedApmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/incidents': typeof AuthenticatedIncidentsRoute
+  '/monitors': typeof AuthenticatedMonitorsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -159,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
   '/api/public/sdk': typeof ApiPublicSdkRoute
+  '/api/sites/dashboard': typeof ApiSitesDashboardRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -171,7 +199,10 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/status': typeof StatusRoute
+  '/apm': typeof AuthenticatedApmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/incidents': typeof AuthenticatedIncidentsRoute
+  '/monitors': typeof AuthenticatedMonitorsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -182,6 +213,7 @@ export interface FileRoutesByTo {
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
   '/api/public/sdk': typeof ApiPublicSdkRoute
+  '/api/sites/dashboard': typeof ApiSitesDashboardRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -196,7 +228,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/status': typeof StatusRoute
+  '/_authenticated/apm': typeof AuthenticatedApmRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/incidents': typeof AuthenticatedIncidentsRoute
+  '/_authenticated/monitors': typeof AuthenticatedMonitorsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -207,6 +242,7 @@ export interface FileRoutesById {
   '/api/auth/otp': typeof ApiAuthOtpRoute
   '/api/auth/verify': typeof ApiAuthVerifyRoute
   '/api/public/sdk': typeof ApiPublicSdkRoute
+  '/api/sites/dashboard': typeof ApiSitesDashboardRoute
   '/api/sites/detail': typeof ApiSitesDetailRoute
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
@@ -221,7 +257,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/docs'
     | '/status'
+    | '/apm'
     | '/dashboard'
+    | '/incidents'
+    | '/monitors'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -232,6 +271,7 @@ export interface FileRouteTypes {
     | '/api/auth/otp'
     | '/api/auth/verify'
     | '/api/public/sdk'
+    | '/api/sites/dashboard'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -244,7 +284,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/docs'
     | '/status'
+    | '/apm'
     | '/dashboard'
+    | '/incidents'
+    | '/monitors'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -255,6 +298,7 @@ export interface FileRouteTypes {
     | '/api/auth/otp'
     | '/api/auth/verify'
     | '/api/public/sdk'
+    | '/api/sites/dashboard'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -268,7 +312,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/docs'
     | '/status'
+    | '/_authenticated/apm'
     | '/_authenticated/dashboard'
+    | '/_authenticated/incidents'
+    | '/_authenticated/monitors'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -279,6 +326,7 @@ export interface FileRouteTypes {
     | '/api/auth/otp'
     | '/api/auth/verify'
     | '/api/public/sdk'
+    | '/api/sites/dashboard'
     | '/api/sites/detail'
     | '/api/sites/events'
     | '/api/sites/keys'
@@ -343,11 +391,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/apm': {
+      id: '/_authenticated/apm'
+      path: '/apm'
+      fullPath: '/apm'
+      preLoaderRoute: typeof AuthenticatedApmRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/incidents': {
+      id: '/_authenticated/incidents'
+      path: '/incidents'
+      fullPath: '/incidents'
+      preLoaderRoute: typeof AuthenticatedIncidentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/monitors': {
+      id: '/_authenticated/monitors'
+      path: '/monitors'
+      fullPath: '/monitors'
+      preLoaderRoute: typeof AuthenticatedMonitorsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/ingest': {
@@ -420,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSdkRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sites/dashboard': {
+      id: '/api/sites/dashboard'
+      path: '/dashboard'
+      fullPath: '/api/sites/dashboard'
+      preLoaderRoute: typeof ApiSitesDashboardRouteImport
+      parentRoute: typeof ApiSitesRoute
+    }
     '/api/sites/detail': {
       id: '/api/sites/detail'
       path: '/detail'
@@ -466,12 +542,18 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedApmRoute: typeof AuthenticatedApmRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedIncidentsRoute: typeof AuthenticatedIncidentsRoute
+  AuthenticatedMonitorsRoute: typeof AuthenticatedMonitorsRoute
   AuthenticatedSitesIdRoute: typeof AuthenticatedSitesIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedApmRoute: AuthenticatedApmRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedIncidentsRoute: AuthenticatedIncidentsRoute,
+  AuthenticatedMonitorsRoute: AuthenticatedMonitorsRoute,
   AuthenticatedSitesIdRoute: AuthenticatedSitesIdRoute,
 }
 
@@ -479,6 +561,7 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface ApiSitesRouteChildren {
+  ApiSitesDashboardRoute: typeof ApiSitesDashboardRoute
   ApiSitesDetailRoute: typeof ApiSitesDetailRoute
   ApiSitesEventsRoute: typeof ApiSitesEventsRoute
   ApiSitesKeysRoute: typeof ApiSitesKeysRoute
@@ -486,6 +569,7 @@ interface ApiSitesRouteChildren {
 }
 
 const ApiSitesRouteChildren: ApiSitesRouteChildren = {
+  ApiSitesDashboardRoute: ApiSitesDashboardRoute,
   ApiSitesDetailRoute: ApiSitesDetailRoute,
   ApiSitesEventsRoute: ApiSitesEventsRoute,
   ApiSitesKeysRoute: ApiSitesKeysRoute,

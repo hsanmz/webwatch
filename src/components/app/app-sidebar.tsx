@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboard, Radar } from "lucide-react";
+import { Activity, Globe, History, LayoutDashboard, Radar, Settings } from "lucide-react";
 
 import {
   Sidebar,
@@ -16,8 +16,16 @@ import {
 
 const NAV_MAIN = [
   {
-    title: "Pemantauan",
+    title: "Overview",
     items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+  },
+  {
+    title: "Pemantauan",
+    items: [
+      { label: "Uptime Monitors", href: "/monitors", icon: Globe },
+      { label: "APM & Issues", href: "/apm", icon: Activity },
+      { label: "Incidents", href: "/incidents", icon: History },
+    ],
   },
 ];
 
@@ -59,10 +67,10 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  const isActive =
-                    item.href === "/dashboard"
-                      ? active === "/dashboard" || active.startsWith("/sites/")
-                      : active === item.href;
+                  let isActive = active === item.href;
+                  if (item.href === "/monitors" && active.startsWith("/sites/")) {
+                    isActive = true;
+                  }
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
