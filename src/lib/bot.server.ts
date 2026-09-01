@@ -84,10 +84,27 @@ async function handleAddSite(userId: string, args: string[]) {
   let parsed: URL;
   try {
     parsed = new URL(guess);
+    const host = parsed.hostname.toLowerCase();
+
+    // Prevent SSRF: block localhost, local, and private IP ranges
+    if (
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      /^127\.\d+\.\d+\.\d+$/.test(host) ||
+      /^10\.\d+\.\d+\.\d+$/.test(host) ||
+      /^192\.168\.\d+\.\d+$/.test(host) ||
+      /^169\.254\.\d+\.\d+$/.test(host) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(host) ||
+      /^\[?(::1|fc00:|fe80:)/.test(host)
+    ) {
+      return "URL tidak valid (internal/private IPs ditolak).";
+    }
+
+    if (!host.includes(".")) return "URL tidak valid.";
   } catch {
     return "URL tidak valid.";
   }
-  if (!parsed.hostname.includes(".")) return "URL tidak valid.";
 
   const url = parsed.toString();
   const taken = await db()

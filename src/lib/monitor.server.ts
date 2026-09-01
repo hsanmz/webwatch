@@ -335,14 +335,20 @@ export async function runDueChecks() {
     })
     .map(mapSite);
 
-  const checkedResults = await Promise.all(
-    due.map((site) =>
-      checkSite(site).catch((err) => {
-        console.error(`[monitor] check failed for ${site.id}`, err);
-        return null;
-      }),
-    ),
-  );
+  const checkedResults = [];
+  const CHUNK_SIZE = 15;
+  for (let i = 0; i < due.length; i += CHUNK_SIZE) {
+    const chunk = due.slice(i, i + CHUNK_SIZE);
+    const results = await Promise.all(
+      chunk.map((site) =>
+        checkSite(site).catch((err) => {
+          console.error(`[monitor] check failed for ${site.id}`, err);
+          return null;
+        }),
+      ),
+    );
+    checkedResults.push(...results);
+  }
 
   const checked = checkedResults.filter((c) => c !== null);
   return checked;

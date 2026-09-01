@@ -34,7 +34,8 @@ class WebWatchClient {
     try {
       // If endpoint is relative, assume we are on the same domain (e.g. self-hosted)
       // Otherwise, use the absolute URL provided during init
-      const targetUrl = this.endpoint.startsWith("http") ? this.endpoint : (window.location.origin + this.endpoint);
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const targetUrl = this.endpoint.startsWith("http") ? this.endpoint : (baseUrl + this.endpoint);
       
       await fetch(targetUrl, {
         method: "POST",

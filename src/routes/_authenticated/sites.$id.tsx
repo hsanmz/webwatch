@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Gauge, History, Loader2, Save, Timer } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -19,7 +19,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { api } from "@/lib/api";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard } from "@/components/app/stat-card";
+import { StatusBadge } from "@/components/app/status-badge";
 
 export const Route = createFileRoute("/_authenticated/sites/$id")({
   component: SiteDetail,
@@ -47,6 +57,7 @@ type SiteRow = {
   fail_threshold: number;
   check_keyword: string | null;
   check_ssl: boolean;
+  last_checked_at: string | null;
 };
 
 type CheckRow = {
@@ -78,17 +89,6 @@ type ApmEventRow = {
 };
 
 type Detail = { site: SiteRow; checks: CheckRow[]; incidents: IncidentRow[] };
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    ...init,
-  });
-  const data = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error ?? `Request gagal (${res.status})`);
-  return data;
-}
 
 function SiteDetail() {
   const { id } = Route.useParams();
@@ -209,47 +209,94 @@ function SiteDetail() {
   const recentLog = [...all].reverse().slice(0, 50);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-      <Link
-        to="/dashboard"
-        className="inline-flex items-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> kembali ke dashboard
-      </Link>
-
-      {detail.isLoading && <p className="text-sm text-muted-foreground">Memuat…</p>}
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      {detail.isLoading && (
+        <div className="space-y-4">
+          <div className="panel h-12 animate-pulse" />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="panel h-24 animate-pulse" />
+            <div className="panel h-24 animate-pulse" />
+            <div className="panel h-24 animate-pulse" />
+          </div>
+        </div>
+      )}
       {!detail.isLoading && !site && (
         <p className="text-sm text-muted-foreground">Situs tidak ditemukan.</p>
       )}
 
       {site && (
         <>
-          <header>
-            <h1 className="font-display text-2xl font-bold">{site.name || site.url}</h1>
-            <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{site.url}</p>
-          </header>
-
-          <section className="grid gap-4 sm:grid-cols-3">
-            <div className="panel p-5">
-              <p className="font-mono text-xs text-muted-foreground">Status</p>
-              <p className="mt-2 font-display text-xl font-semibold">
-                {!site.is_active ? "Paused" : site.current_status.toUpperCase()}
-              </p>
-            </div>
-            {Object.entries(windows).map(([label, stats]) => (
-              <div key={label} className="panel p-5">
-                <p className="font-mono text-xs text-muted-foreground">Uptime {label}</p>
-                <p className="mt-2 font-display text-xl font-semibold">{stats.uptime}%</p>
-                <p className="mt-1 font-mono text-xs text-muted-foreground">
-                  {stats.avgMs != null ? `rata-rata ${stats.avgMs} ms` : "belum ada data"}
-                </p>
+          <PageHeader
+            eyebrow="Site Detail"
+            title={site.name || site.url}
+            description={site.url}
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 text-xs font-medium text-muted-foreground"
+                >
+                  <Link to="/dashboard">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
+                  </Link>
+                </Button>
+                <StatusBadge status={site.current_status} active={site.is_active} />
               </div>
+            }
+          />
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <Timer className="inline h-3.5 w-3.5 text-primary" />
+              tiap {site.interval_seconds / 60}m
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <History className="inline h-3.5 w-3.5 text-primary" />
+              {site.last_checked_at
+                ? `cek ${new Date(site.last_checked_at)
+                    .toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })
+                    .slice(0, 5)} WIB`
+                : "belum dicek"}
+            </span>
+          </div>
+
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              icon={CheckCircle2}
+              label="Status"
+              value={!site.is_active ? "Paused" : site.current_status.toUpperCase()}
+              sub="real-time monitor"
+              tone={
+                !site.is_active
+                  ? "paused"
+                  : site.current_status === "up"
+                    ? "up"
+                    : site.current_status === "down"
+                      ? "down"
+                      : "default"
+              }
+            />
+            {Object.entries(windows).map(([label, stats]) => (
+              <StatCard
+                key={label}
+                icon={Gauge}
+                label={`Uptime ${label}`}
+                value={`${stats.uptime}%`}
+                sub={stats.avgMs != null ? `rata-rata ${stats.avgMs} ms` : "belum ada data"}
+              />
             ))}
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
             <div className="panel p-5">
-              <h2 className="font-display text-base font-semibold">Uptime harian (30 hari)</h2>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-base font-semibold">Uptime harian</h2>
+                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  30 hari
+                </span>
+              </div>
               <div className="mt-4 h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
@@ -290,7 +337,12 @@ function SiteDetail() {
             </div>
 
             <div className="panel p-5">
-              <h2 className="font-display text-base font-semibold">Response time (30 hari)</h2>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-base font-semibold">Response time</h2>
+                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  30 hari
+                </span>
+              </div>
               <div className="mt-4 h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
@@ -417,7 +469,9 @@ function SiteDetail() {
                       </span>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 text-xs font-medium">Cara Pasang</Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs font-medium">
+                            Cara Pasang
+                          </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-3xl">
                           <DialogHeader>
@@ -425,22 +479,61 @@ function SiteDetail() {
                           </DialogHeader>
                           <div className="space-y-6 py-4">
                             <div>
-                              <h3 className="font-semibold text-sm mb-2">1. Frontend (Browser / React / Vue / HTML)</h3>
-                              <p className="text-xs text-muted-foreground mb-2">Letakkan di dalam tag <code>&lt;head&gt;</code> pada file index.html aplikasimu.</p>
+                              <h3 className="font-semibold text-sm mb-2">
+                                1. Frontend (Browser / React / Vue / HTML)
+                              </h3>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                Letakkan di dalam tag <code>&lt;head&gt;</code> pada file index.html
+                                aplikasimu.
+                              </p>
                               <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
-<code className="text-blue-400">&lt;script</code> <code className="text-yellow-200">type</code>=<span className="text-green-300">"module"</span><code className="text-blue-400">&gt;</code>{'\n'}
-{'  '}<code className="text-blue-400">import</code> {'{'} WebWatch {'}'} <code className="text-blue-400">from</code> <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/public/sdk"</span>;{'\n\n'}
-{'  '}WebWatch.init(<span className="text-green-300">"{k.key}"</span>, <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/ingest"</span>);{'\n'}
-<code className="text-blue-400">&lt;/script&gt;</code>
+                                <code className="text-blue-400">&lt;script</code>{" "}
+                                <code className="text-yellow-200">type</code>=
+                                <span className="text-green-300">"module"</span>
+                                <code className="text-blue-400">&gt;</code>
+                                {"\n"}
+                                {"  "}
+                                <code className="text-blue-400">import</code> {"{"} WebWatch {"}"}{" "}
+                                <code className="text-blue-400">from</code>{" "}
+                                <span className="text-green-300">
+                                  "{typeof window !== "undefined" ? window.location.origin : ""}
+                                  /api/public/sdk"
+                                </span>
+                                ;{"\n\n"}
+                                {"  "}WebWatch.init(
+                                <span className="text-green-300">"{k.key}"</span>,{" "}
+                                <span className="text-green-300">
+                                  "{typeof window !== "undefined" ? window.location.origin : ""}
+                                  /api/ingest"
+                                </span>
+                                );{"\n"}
+                                <code className="text-blue-400">&lt;/script&gt;</code>
                               </pre>
                             </div>
                             <div>
-                              <h3 className="font-semibold text-sm mb-2">2. Backend (Node.js / Express)</h3>
-                              <p className="text-xs text-muted-foreground mb-2">Letakkan paling bawah sebelum <code>app.listen</code>.</p>
+                              <h3 className="font-semibold text-sm mb-2">
+                                2. Backend (Node.js / Express)
+                              </h3>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                Letakkan paling bawah sebelum <code>app.listen</code>.
+                              </p>
                               <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
-<code className="text-blue-400">import</code> {'{'} WebWatch {'}'} <code className="text-blue-400">from</code> <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/public/sdk"</span>;{'\n\n'}
-WebWatch.init(<span className="text-green-300">"{k.key}"</span>, <span className="text-green-300">"{typeof window !== "undefined" ? window.location.origin : ""}/api/ingest"</span>);{'\n'}
-app.use(WebWatch.expressErrorHandler());
+                                <code className="text-blue-400">import</code> {"{"} WebWatch {"}"}{" "}
+                                <code className="text-blue-400">from</code>{" "}
+                                <span className="text-green-300">
+                                  "{typeof window !== "undefined" ? window.location.origin : ""}
+                                  /api/public/sdk"
+                                </span>
+                                ;{"\n\n"}
+                                WebWatch.init(<span className="text-green-300">
+                                  "{k.key}"
+                                </span>,{" "}
+                                <span className="text-green-300">
+                                  "{typeof window !== "undefined" ? window.location.origin : ""}
+                                  /api/ingest"
+                                </span>
+                                );{"\n"}
+                                app.use(WebWatch.expressErrorHandler());
                               </pre>
                             </div>
                           </div>
@@ -511,33 +604,58 @@ app.use(WebWatch.expressErrorHandler());
           </section>
 
           <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold">Insiden</h2>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="font-display text-base font-semibold">Insiden</h2>
+              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                {detail.data?.incidents.length ?? 0} total
+              </span>
+            </div>
             <ul className="mt-4 space-y-3">
               {detail.data?.incidents.length === 0 && (
                 <li className="text-sm text-muted-foreground">Belum ada insiden 🎉</li>
               )}
               {detail.data?.incidents.map((incident) => (
-                <li key={incident.id} className="font-mono text-xs text-muted-foreground">
-                  <span className="text-foreground">
-                    {new Date(incident.started_at).toLocaleString()}
-                  </span>{" "}
-                  ·{" "}
-                  {incident.resolved_at
-                    ? duration(
-                        new Date(incident.resolved_at).getTime() -
-                          new Date(incident.started_at).getTime(),
-                      )
-                    : "masih berlangsung"}
-                  {incident.error_message ? ` · ${incident.error_message}` : ""}
+                <li
+                  key={incident.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/40 px-3.5 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        incident.resolved_at
+                          ? "bg-[var(--down)]/60"
+                          : "bg-[var(--down)] animate-pulse"
+                      }`}
+                    />
+                    <span className="font-mono text-xs text-foreground">
+                      {new Date(incident.started_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="font-mono text-[11px] text-muted-foreground">
+                    {incident.resolved_at
+                      ? `berlangsung ${duration(
+                          new Date(incident.resolved_at).getTime() -
+                            new Date(incident.started_at).getTime(),
+                        )} · selesai`
+                      : "masih berlangsung"}
+                  </div>
+                  {incident.error_message && (
+                    <p className="w-full truncate font-mono text-[11px] text-muted-foreground">
+                      {incident.error_message}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
           </section>
 
           <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold">
-              Riwayat pengecekan (50 terakhir)
-            </h2>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="font-display text-base font-semibold">Riwayat pengecekan</h2>
+              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                50 terakhir
+              </span>
+            </div>
             <ul className="mt-4 space-y-2">
               {recentLog.length === 0 && (
                 <li className="text-sm text-muted-foreground">Belum ada pengecekan.</li>

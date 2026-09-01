@@ -7,49 +7,69 @@ export const Route = createFileRoute("/api/system-status")({
       GET: async () => {
         try {
           const d1 = db();
-          const sitesRes = await d1.prepare("SELECT count(*) as count FROM sites").first<{count: number}>();
-          const apmRes = await d1.prepare("SELECT count(*) as count FROM apm_events WHERE created_at > datetime('now', '-24 hours')").first<{count: number}>();
-          const checksRes = await d1.prepare("SELECT count(*) as count FROM checks WHERE checked_at > datetime('now', '-24 hours')").first<{count: number}>();
+          const sitesRes = await d1
+            .prepare("SELECT count(*) as count FROM sites")
+            .first<{ count: number }>();
+          const apmRes = await d1
+            .prepare(
+              "SELECT count(*) as count FROM apm_events WHERE created_at > datetime('now', '-24 hours')",
+            )
+            .first<{ count: number }>();
+          const checksRes = await d1
+            .prepare(
+              "SELECT count(*) as count FROM checks WHERE checked_at > datetime('now', '-24 hours')",
+            )
+            .first<{ count: number }>();
 
-          const historyRes = await d1.prepare(`
-            SELECT date(checked_at, '+7 hours') as day, 
-                   SUM(CASE WHEN is_up = 1 THEN 1 ELSE 0 END) as up_checks,
-                   COUNT(*) as total_checks
-            FROM checks
-            WHERE checked_at > datetime('now', '-30 days')
-            GROUP BY date(checked_at, '+7 hours')
-            ORDER BY date(checked_at, '+7 hours') ASC
-          `).all<{day: string; up_checks: number; total_checks: number}>();
+          // Pintar: Cek kapan terakhir kali Cron Worker menjalankan pengecekan
+          // Jika tidak ada pengecekan dalam 10 menit terakhir, asumsikan Worker sedang down
+          const lastCheck = await d1
+            .prepare("SELECT checked_at FROM checks ORDER BY checked_at DESC LIMIT 1")
+            .first<{ checked_at: string }>();
+          
+          let workerStatus = "operational";
+          if (lastCheck && lastCheck.checked_at) {
+            const lastCheckTime = new Date(lastCheck.checked_at).getTime();
+            const now = Date.now();
+            if (now - lastCheckTime > 10 * 60 * 1000) { // 10 menit mati
+              workerStatus = "outage";
+            }
+          }
 
-          const incidentsRes = await d1.prepare(`
-            SELECT i.started_at, i.resolved_at, i.error_message, s.name as site_name
-            FROM incidents i
-            JOIN sites s ON i.site_id = s.id
-            ORDER BY i.started_at DESC
-            LIMIT 5
-          `).all<{started_at: string; resolved_at: string | null; error_message: string; site_name: string}>();
+          const platformStatus = workerStatus === "outage" ? "degraded" : "operational";
 
           return Response.json({
-            status: "operational",
+            status: platformStatus,
+            components: [
+              { name: "Web Dashboard & API", status: "operational", description: "Layanan antarmuka pengguna dan core API" },
+              { name: "Uptime Monitoring Engine", status: workerStatus, description: "Edge workers untuk ping periodik situs pengguna" },
+              { name: "APM Ingestion Nodes", status: "operational", description: "Penerima log error dari aplikasi pengguna" },
+              { name: "Database & Storage", status: "operational", description: "Penyimpanan data inti dan konfigurasi" }
+            ],
             metrics: {
               totalSites: sitesRes?.count || 0,
               apmEvents24h: apmRes?.count || 0,
               checks24h: checksRes?.count || 0,
             },
-            history: historyRes.results || [],
-            incidents: incidentsRes.results || []
           });
         } catch (error) {
-          // Changed to 200 so UI renders this properly instead of generic query failure
-          return Response.json({
-            status: "outage",
-            metrics: { totalSites: 0, apmEvents24h: 0, checks24h: 0 },
-            history: [],
-            incidents: [],
-            error: String(error)
-          }, { status: 200 });
+          // Jika DB error, asumsikan platform down
+          return Response.json(
+            {
+              status: "outage",
+              components: [
+                { name: "Web Dashboard & API", status: "outage", description: "Layanan antarmuka pengguna dan core API" },
+                { name: "Uptime Monitoring Engine", status: "unknown", description: "Edge workers untuk ping periodik situs pengguna" },
+                { name: "APM Ingestion Nodes", status: "unknown", description: "Penerima log error dari aplikasi pengguna" },
+                { name: "Database & Storage", status: "outage", description: "Penyimpanan data inti dan konfigurasi" }
+              ],
+              metrics: { totalSites: 0, apmEvents24h: 0, checks24h: 0 },
+              error: String(error),
+            },
+            { status: 200 },
+          );
         }
-      }
-    }
-  }
+      },
+    },
+  },
 });

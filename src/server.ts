@@ -48,7 +48,7 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     setAppEnv(env);
-    (globalThis as any).__env__ = env;
+    (globalThis as Record<string, unknown>)["__env__"] = env;
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

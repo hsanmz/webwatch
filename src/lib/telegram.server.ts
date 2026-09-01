@@ -1,13 +1,26 @@
+import { getAppEnv } from "./wrangler-env";
+
 const API = "https://api.telegram.org";
 
+function safeAppEnv() {
+  try {
+    return getAppEnv();
+  } catch {
+    return {} as Record<string, string>;
+  }
+}
+
 function token() {
-  const t = process.env["TELEGRAM_BOT_TOKEN"];
+  const envValue = typeof process !== "undefined" ? process.env["TELEGRAM_BOT_TOKEN"] : undefined;
+  const t = safeAppEnv().TELEGRAM_BOT_TOKEN || envValue;
   if (!t) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
   return t;
 }
 
 export function botUsername() {
-  return (process.env["TELEGRAM_BOT_USERNAME"] ?? "").replace(/^@/, "");
+  const envValue =
+    typeof process !== "undefined" ? process.env["TELEGRAM_BOT_USERNAME"] : undefined;
+  return (safeAppEnv().TELEGRAM_BOT_USERNAME || envValue || "").replace(/^@/, "");
 }
 
 export async function sendTelegram(chatId: string, text: string) {

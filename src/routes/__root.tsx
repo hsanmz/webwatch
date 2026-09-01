@@ -117,13 +117,68 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+import { useQuery } from "@tanstack/react-query";
+
+function GlobalSystemStatus() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["global-system-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/system-status");
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  const status = isError ? "outage" : data?.status || "operational";
+  
+  const color = 
+    status === "operational" ? "bg-emerald-500" :
+    status === "degraded" ? "bg-yellow-500" : 
+    "bg-red-500";
+    
+  const text =
+    status === "operational" ? "All Systems Operational" :
+    status === "degraded" ? "Degraded System Performance" : 
+    "Major System Outage";
+
+  if (isLoading) return null;
+
+  return (
+    <footer className="border-t border-border bg-background py-4 mt-auto">
+      <div className="mx-auto max-w-6xl px-4 flex items-center justify-between text-xs text-muted-foreground">
+        <div>
+          &copy; {new Date().getFullYear()} WebWatch. All rights reserved.
+        </div>
+        <Link 
+          to="/status" 
+          className="inline-flex items-center gap-2 font-mono hover:text-foreground transition-colors"
+        >
+          <span className="relative flex h-2 w-2">
+            {status === "operational" && (
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}></span>
+            )}
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`}></span>
+          </span>
+          {text}
+        </Link>
+      </div>
+    </footer>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="flex min-h-screen flex-col">
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <div className="flex-1">
+          <Outlet />
+        </div>
+        <GlobalSystemStatus />
+      </div>
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

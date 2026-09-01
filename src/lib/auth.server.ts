@@ -8,10 +8,8 @@ const OTP_MAX_ACTIVE = 3;
 const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_MIN_MS = 30_000;
 
-let nodeCrypto: typeof import("node:crypto") | undefined;
-async function getNodeCrypto() {
-  if (!nodeCrypto) nodeCrypto = await import("node:crypto");
-  return nodeCrypto;
+function buf2hex(buffer: ArrayBuffer | Uint8Array): string {
+  return [...new Uint8Array(buffer)].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 export function newId(): string {
@@ -19,8 +17,11 @@ export function newId(): string {
 }
 
 export async function sha256Hex(value: string): Promise<string> {
-  const { createHash } = await getNodeCrypto();
-  return createHash("sha256").update(value, "utf8").digest("hex");
+  const hashBuffer = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return buf2hex(hashBuffer);
 }
 
 export function parseCookies(request: Request): Record<string, string> {
@@ -82,8 +83,9 @@ export async function requireUser(request: Request): Promise<SessionUser | null>
 }
 
 export async function issueSession(userId: string): Promise<{ token: string; expiresAt: string }> {
-  const { randomBytes } = await getNodeCrypto();
-  const token = randomBytes(32).toString("hex");
+  const arr = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(arr);
+  const token = buf2hex(arr);
   const hash = await sha256Hex(token);
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await db()
@@ -109,8 +111,9 @@ export function clearSessionCookie(): string {
 }
 
 export async function createOtpForEmail(email: string): Promise<string> {
-  const { randomInt } = await getNodeCrypto();
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const arr = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(arr);
+  const code = String(arr[0] % 1_000_000).padStart(6, "0");
   const hash = await sha256Hex(`${email}:${code}`);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
   const now = new Date().toISOString();
@@ -189,8 +192,9 @@ type UserRow = {
 };
 
 export async function createLinkForEmail(email: string): Promise<string> {
-  const { randomBytes } = await getNodeCrypto();
-  const token = randomBytes(16).toString("hex");
+  const arr = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(arr);
+  const token = buf2hex(arr);
   const expiresAt = new Date(Date.now() + LINK_TTL_MS).toISOString();
   await db()
     .prepare("INSERT INTO telegram_links (token, email, expires_at) VALUES (?, ?, ?)")

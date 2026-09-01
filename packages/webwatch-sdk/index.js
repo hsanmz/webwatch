@@ -1,11 +1,17 @@
 export const WebWatch = {
   apiKey: null,
-  
+
   init(key) {
     this.apiKey = key;
     if (typeof window !== "undefined") {
       window.addEventListener("error", async (event) => {
-        this.capture("frontend_error", event.message, event.error?.stack, window.location.href, "GET");
+        this.capture(
+          "frontend_error",
+          event.message,
+          event.error?.stack,
+          window.location.href,
+          "GET",
+        );
       });
     }
   },
@@ -24,17 +30,23 @@ export const WebWatch = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
-          events: [{
-             type, message, stack_trace: stackTrace, url, method,
-             environment: process?.env?.NODE_ENV || "production"
-          }]
-        })
+          events: [
+            {
+              type,
+              message,
+              stack_trace: stackTrace,
+              url,
+              method,
+              environment: process?.env?.NODE_ENV || "production",
+            },
+          ],
+        }),
       });
     } catch (e) {
       console.error("WebWatch SDK Ingest Failed:", e);
     }
-  }
+  },
 };

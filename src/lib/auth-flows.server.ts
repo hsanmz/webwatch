@@ -31,6 +31,13 @@ function deepLinkFor(token: string): string {
 }
 
 export async function requestOtp(request: Request): Promise<Response> {
+  const reqAny = request as any;
+  const env = reqAny.runtime?.cloudflare?.env ?? reqAny.cf?.env ?? (globalThis as any).__env__;
+  if (env) {
+    const { setAppEnv } = await import("./wrangler-env");
+    setAppEnv(env);
+  }
+
   let body: { email?: unknown };
   try {
     body = (await request.json()) as { email?: unknown };

@@ -4,8 +4,17 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env["TELEGRAM_WEBHOOK_SECRET"];
-        if (!expected) return new Response("Server configuration error", { status: 500 });
+        const { getAppEnv } = await import("@/lib/wrangler-env");
+        let envValue;
+        try {
+          envValue = getAppEnv().TELEGRAM_WEBHOOK_SECRET;
+        } catch {
+          // ignore when env is not set
+        }
+        const expected =
+          envValue ||
+          (typeof process !== "undefined" ? process.env["TELEGRAM_WEBHOOK_SECRET"] : undefined);
+        if (!expected) return Response.json({ error: "No secret" }, { status: 500 });
 
         const provided = request.headers.get("x-telegram-bot-api-secret-token") ?? "";
         const { createHash, timingSafeEqual } = await import("node:crypto");

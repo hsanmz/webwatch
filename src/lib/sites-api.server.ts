@@ -67,7 +67,24 @@ function normalizeUrl(value: unknown): string | null {
   const raw = /^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`;
   try {
     const parsed = new URL(raw);
-    if (!parsed.hostname.includes(".")) return null;
+    const host = parsed.hostname.toLowerCase();
+
+    // Prevent SSRF: block localhost, local, and private IP ranges
+    if (
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      /^127\.\d+\.\d+\.\d+$/.test(host) ||
+      /^10\.\d+\.\d+\.\d+$/.test(host) ||
+      /^192\.168\.\d+\.\d+$/.test(host) ||
+      /^169\.254\.\d+\.\d+$/.test(host) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(host) ||
+      /^\[?(::1|fc00:|fe80:)/.test(host)
+    ) {
+      return null;
+    }
+
+    if (!host.includes(".")) return null;
     return parsed.toString();
   } catch {
     return null;
@@ -217,7 +234,8 @@ export async function updateSite(request: Request): Promise<Response> {
           ? patch["keyword"].trim()
           : null
         : current.check_keyword;
-    const checkSsl = patch["ssl"] !== undefined ? (patch["ssl"] === true ? 1 : 0) : current.check_ssl;
+    const checkSsl =
+      patch["ssl"] !== undefined ? (patch["ssl"] === true ? 1 : 0) : current.check_ssl;
     const isActive =
       patch["is_active"] !== undefined ? (patch["is_active"] === true ? 1 : 0) : current.is_active;
 
@@ -276,7 +294,7 @@ export async function siteDetail(request: Request): Promise<Response> {
   try {
     const site = await db()
       .prepare(
-        `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status
+        `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status, last_checked_at
          FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
       )
       .bind(id, user.id)
@@ -360,10 +378,15 @@ export async function verifySite(request: Request): Promise<Response> {
 
   try {
     const checkUrl = new URL("/webwatch-verify.txt", site.url).toString();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     const res = await fetch(checkUrl, {
       method: "GET",
       headers: { "User-Agent": "WebWatch-Verifier/1.0" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       return json({ error: "file_not_found" }, 400);
     }

@@ -6,43 +6,61 @@ import { sendTelegram, formatApmErrorMessage } from "@/lib/telegram.server";
 export const Route = createFileRoute("/api/ingest")({
   server: {
     handlers: {
+      OPTIONS: async () => {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      },
       POST: async ({ request }) => {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        };
+
         // Typical APM ingest logic via Bearer token
         const auth = request.headers.get("Authorization");
         if (!auth || !auth.startsWith("Bearer ")) {
-          return Response.json({ error: "missing_token" }, { status: 401 });
+          return Response.json({ error: "missing_token" }, { status: 401, headers: corsHeaders });
         }
         const key = auth.slice(7);
 
-        // Validate API Key
-        const apiKey = await db()
-          .prepare("SELECT site_id FROM api_keys WHERE key = ? LIMIT 1")
-          .bind(key)
-          .first<{ site_id: string }>();
-        if (!apiKey) {
-          return Response.json({ error: "invalid_key" }, { status: 401 });
-        }
-
+        // Validate API Key and fetch site in one query
         const site = await db()
           .prepare(
             `
-          SELECT s.id, s.name, s.url, s.verification_status, u.chat_id 
-          FROM sites s 
+          SELECT s.id, s.name, s.url, s.verification_status, u.chat_id, ak.site_id
+          FROM api_keys ak
+          JOIN sites s ON s.id = ak.site_id
           JOIN users u ON u.id = s.user_id 
-          WHERE s.id = ? LIMIT 1
+          WHERE ak.key = ? LIMIT 1
         `,
           )
-          .bind(apiKey.site_id)
+          .bind(key)
           .first<{
             id: string;
             name: string | null;
             url: string;
             verification_status: string;
             chat_id: string | null;
+            site_id: string;
           }>();
 
-        if (!site || site.verification_status !== "verified") {
-          return Response.json({ error: "site_not_verified" }, { status: 403 });
+        if (!site) {
+          return Response.json({ error: "invalid_key" }, { status: 401, headers: corsHeaders });
+        }
+
+        if (site.verification_status !== "verified") {
+          return Response.json(
+            { error: "site_not_verified" },
+            { status: 403, headers: corsHeaders },
+          );
         }
 
         try {
@@ -59,7 +77,10 @@ export const Route = createFileRoute("/api/ingest")({
           };
 
           if (!body.events || !Array.isArray(body.events)) {
-            return Response.json({ error: "invalid_payload" }, { status: 400 });
+            return Response.json(
+              { error: "invalid_payload" },
+              { status: 400, headers: corsHeaders },
+            );
           }
 
           const stmt = db().prepare(
@@ -71,7 +92,7 @@ export const Route = createFileRoute("/api/ingest")({
           const batch = body.events.map((ev) =>
             stmt.bind(
               newId(),
-              apiKey.site_id,
+              site.site_id,
               ev.environment ?? "production",
               ev.type ?? "log",
               ev.message ?? "",
@@ -82,7 +103,11 @@ export const Route = createFileRoute("/api/ingest")({
             ),
           );
 
-          await db().batch(batch);
+          // D1 typically limits batches to 100 statements
+          const CHUNK_SIZE = 50;
+          for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
+            await db().batch(batch.slice(i, i + CHUNK_SIZE));
+          }
 
           // Notify Telegram for the first error in the batch to avoid spam
           if (site.chat_id) {
@@ -98,14 +123,14 @@ export const Route = createFileRoute("/api/ingest")({
                 message: firstError.message || "Unknown error occurred",
                 endpoint: `${firstError.method || "GET"} ${firstError.url || "/"}`,
               });
-              // Send async without awaiting so we don't block the ingest response
-              sendTelegram(site.chat_id, msg).catch(console.error);
+              // Await the send so it doesn't get cancelled by the serverless runtime
+              await sendTelegram(site.chat_id, msg).catch(console.error);
             }
           }
 
-          return Response.json({ ok: true, ingested: batch.length });
+          return Response.json({ ok: true, ingested: batch.length }, { headers: corsHeaders });
         } catch (error) {
-          return Response.json({ error: "bad_request" }, { status: 400 });
+          return Response.json({ error: "bad_request" }, { status: 400, headers: corsHeaders });
         }
       },
     },

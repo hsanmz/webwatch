@@ -190,7 +190,8 @@ function AuthPage() {
         });
         const data = (await res.json()) as { status?: string };
         if (data.status === "linked") {
-          if (pollingRef.current != null) window.clearInterval(pollingRef.current);
+          if (pollingRef.current == null) return; // Already cleared by a concurrent poll
+          window.clearInterval(pollingRef.current);
           pollingRef.current = null;
           await requestOtp(email);
           setStep("code");
