@@ -5,12 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Webwatch design system: single source of truth.
+ * WebWatch design system: single source of truth.
  *
  * Everything visual resolves through this file. Components never hard-code a
  * colour, radius, shadow, or duration: they consume the semantic tokens below.
  *
- * Palette values are the Webwatch baseline converted to OKLCH so that the
+ * Palette values are the WebWatch baseline converted to OKLCH so that the
  * lightness/chroma relationships survive a future dark theme. Raw palette
  * entries keep the `--brand-*`, `--neutral-*` and `--status-*` names; the
  * `--color-*` entries are the semantic roles components are allowed to use.
@@ -34,6 +34,19 @@
  *     reason: warning-700 on warning-100 measures 4.42:1.
  *   - `--paused` is a neutral, not amber. Paused means "not being monitored",
  *     which is not a fault; amber is reserved for degraded and expiring SSL.
+ *
+ * Mirrors that cannot read CSS variables (must be kept in sync manually):
+ *   src/lib/error-page.ts: standalone crash page that cannot load app CSS.
+ *     background  #fafafa  ≈ --neutral-50   (#F8FAFC)
+ *     text        #111     ≈ --neutral-900  (#0F172A)
+ *     muted text  #4b5563  ≈ --color-text-muted (#5C6C85)
+ *     surface     #fff     = --neutral-0    (#FFFFFF)
+ *     border      #d1d5db  ≈ --neutral-300  (#CBD5E1)
+ *   public/site.webmanifest:
+ *     theme_color      → --brand-700 (#078765)
+ *     background_color → --neutral-50 (#F8FAFC)
+ *   src/routes/__root.tsx <meta name="theme-color">:
+ *     content="#078765" → --brand-700
  */
 
 :root {
@@ -87,6 +100,8 @@
   --color-primary: var(--brand-800);
   --color-primary-hover: var(--brand-900);
   --color-primary-subtle: var(--brand-100);
+  --color-secondary-hover: var(--neutral-200);
+  --color-danger-hover: var(--danger-700);
   --color-focus: var(--teal-700);
   --color-success: var(--success-700);
   --color-success-surface: var(--success-100);
@@ -161,7 +176,6 @@
 
   /* ---- Motion -------------------------------------------------------- */
   --motion-fast: 120ms;
-  --motion-base: 180ms;
   --motion-slow: 240ms;
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
 
@@ -200,6 +214,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-border-strong: var(--color-border-strong);
   --color-surface: var(--surface);
   --color-surface-foreground: var(--surface-foreground);
   --color-brand: var(--brand-700);
@@ -224,6 +239,8 @@
   --color-neutral-900: var(--neutral-900);
   --color-primary-hover: var(--color-primary-hover);
   --color-primary-subtle: var(--color-primary-subtle);
+  --color-secondary-hover: var(--color-secondary-hover);
+  --color-danger-hover: var(--color-danger-hover);
   --color-up: var(--up);
   --color-down: var(--down);
   --color-degraded: var(--degraded);

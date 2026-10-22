@@ -156,7 +156,7 @@ function Dashboard() {
         <EmptyState
           icon={Server}
           title="Belum ada situs dipantau"
-          description="Tambahkan website pertama kamu di halaman Monitors, lalu Webwatch akan mengeceknya secara berkala."
+          description="Tambahkan website pertama kamu di halaman Monitors, lalu WebWatch akan mengeceknya secara berkala."
           action={
             <Button asChild>
               <Link to="/monitors">Tambah Situs Pertama</Link>

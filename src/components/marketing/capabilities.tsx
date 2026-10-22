@@ -61,7 +61,7 @@ function KeywordMock() {
       <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
         <span className="h-2 w-2 shrink-0 rounded-full bg-up" aria-hidden="true" />
         <span className="truncate font-mono text-xs text-muted-foreground">contoh-toko.id</span>
-        <span className="ml-auto shrink-0 rounded bg-success-surface px-1.5 py-0.5 font-mono text-[11px] text-success">
+        <span className="ml-auto shrink-0 rounded bg-success-surface px-1.5 py-0.5 font-mono text-xs text-success">
           &quot;keranjang&quot;
         </span>
       </div>
@@ -169,7 +169,7 @@ function ApmMock() {
       <p className="mt-2.5 text-sm font-medium text-foreground">
         TypeError: cannot read properties of undefined
       </p>
-      <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-muted p-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+      <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-muted p-2.5 font-mono text-xs leading-relaxed text-muted-foreground">
         {`at checkout (checkout.js:42:11)
 at async submitOrder (checkout.js:88:5)`}
       </pre>

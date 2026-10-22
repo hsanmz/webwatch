@@ -129,7 +129,7 @@ function ApmIssues() {
                   </p>
                 )}
                 {ev.stack_trace && (
-                  <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
                     {ev.stack_trace}
                   </pre>
                 )}

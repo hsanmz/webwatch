@@ -178,7 +178,7 @@ const DOCS_SECTIONS = [
             </p>
           </div>
           <div className="panel p-6">
-            <Activity className="mb-4 h-7 w-7 text-teal-700" aria-hidden="true" />
+            <Activity className="mb-4 h-7 w-7 text-primary" aria-hidden="true" />
             <h3 className="mb-2 text-base font-semibold text-foreground">
               Application Performance Monitoring
             </h3>

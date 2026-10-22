@@ -186,7 +186,7 @@ export function SiteCard({
               <AlertDialogFooter>
                 <AlertDialogCancel>Batal</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:brightness-95"
+                  className="bg-destructive text-destructive-foreground hover:bg-danger-hover"
                   onClick={() => onRemove(site)}
                 >
                   Hapus

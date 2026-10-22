@@ -195,7 +195,7 @@ function Monitors() {
                       {url.trim() !== "" && urlCheck.ok ? (
                         <>
                           Akan dipantau sebagai{" "}
-                          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
                             {/^https?:\/\//i.test(url.trim())
                               ? url.trim()
                               : `https://${url.trim()}`}

@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /*
- * Buttons follow the shared state model: default, hover, focus-visible, active,
+ * Buttons follow the shared state model: default, hover, focus-visible,
  * disabled and loading. The focus ring is global (`:focus-visible` in
  * styles.css), so no variant overrides it and every button shows the same
  * indicator.
@@ -22,10 +22,10 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         secondary:
-          "border border-border bg-secondary text-secondary-foreground hover:bg-neutral-200",
+          "border border-border bg-secondary text-secondary-foreground hover:bg-secondary-hover",
         outline: "border border-input bg-surface text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
-        destructive: "bg-destructive text-destructive-foreground hover:brightness-95",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-danger-hover",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

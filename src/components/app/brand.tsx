@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
 /*
- * One place decides how the Webwatch mark is drawn.
+ * One place decides how the WebWatch mark is drawn.
  *
- *   BrandLockup - the wide radar mark, used where the brand is introduced
+ *   BrandLockup - the mark at full size, used where the brand is introduced
  *                 (landing page, auth screen).
- *   BrandMark    - the square glyph, used in the app chrome next to the
- *                 product name where a wide lockup would not fit.
+ *   BrandMark    - the square badge glyph, used in the app chrome next to the
+ *                 product name where a full-size lockup would not fit.
  *
  * Both point at files that already live in /public, so the naming convention
  * stays untouched.

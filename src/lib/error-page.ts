@@ -1,3 +1,15 @@
+/*
+ * Standalone crash page rendered before the app bundle loads. It cannot read
+ * CSS variables or load fonts, so the palette is hard-coded here.
+ *
+ * These values must be kept in sync with the design tokens in styles.css
+ * (mirrors are documented there under "Mirrors that cannot read CSS variables"):
+ *   background  #fafafa  ≈ --neutral-50   (#F8FAFC)
+ *   text        #111     ≈ --neutral-900  (#0F172A)
+ *   muted text  #4b5563  ≈ --color-text-muted (#5C6C85)
+ *   surface     #fff     = --neutral-0    (#FFFFFF)
+ *   border      #d1d5db  ≈ --neutral-300  (#CBD5E1)
+ */
 export function renderErrorPage(): string {
   return `<!doctype html>
 <html lang="en">
