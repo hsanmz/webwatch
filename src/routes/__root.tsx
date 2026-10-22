@@ -74,6 +74,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#01A471" },
       { title: "WebWatch — Uptime Monitor with Telegram Alerts" },
       {
         name: "description",
@@ -82,8 +83,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { property: "og:image", content: "/og.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      {
+        property: "og:image:alt",
+        content: "WebWatch — Uptime Monitor with Telegram Alerts",
+      },
       { property: "og:title", content: "WebWatch — Uptime Monitor with Telegram Alerts" },
+      {
+        property: "og:description",
+        content:
+          "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+      },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "/og.png" },
+      { name: "twitter:title", content: "WebWatch — Uptime Monitor with Telegram Alerts" },
+      {
+        name: "twitter:description",
+        content:
+          "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -93,8 +112,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap",
       },
-      { rel: "icon", href: "/favicon.png", type: "image/png" },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.ico", type: "image/x-icon", sizes: "any" },
+      { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "512x512" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
+      { rel: "manifest", href: "/site.webmanifest" },
     ],
   }),
   shellComponent: RootShell,

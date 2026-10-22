@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -18,11 +18,68 @@ import {
   Database,
   BellRing,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/docs")({
   component: DocsPage,
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Minimal syntax highlighter — keeps the dark code blocks readable without   */
+/*  hand-writing a <span> per token.                                           */
+/* -------------------------------------------------------------------------- */
+
+const TOKEN_RE =
+  /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:const|let|var|function|return|await|async|import|from|export|new|try|catch|finally|if|else|for|of|in|true|false|null|undefined|class|extends|throw)\b|\b\d+(?:\.\d+)?\b)/g;
+
+function highlightLine(line: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const match of line.matchAll(TOKEN_RE)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push(line.slice(cursor, index));
+
+    const token = match[0];
+    let className = "text-purple-400";
+    if (token.startsWith("//")) className = "text-gray-500";
+    else if (/^["'`]/.test(token)) className = "text-green-300";
+    else if (/^\d/.test(token)) className = "text-orange-300";
+
+    parts.push(
+      <span key={`${index}-${token}`} className={className}>
+        {token}
+      </span>,
+    );
+    cursor = index + token.length;
+  }
+
+  if (cursor < line.length) parts.push(line.slice(cursor));
+  return parts;
+}
+
+function CodeBlock({ file, code }: { file: string; code: string }) {
+  return (
+    <div className="bg-[#0D1117] border border-border rounded-xl overflow-hidden mb-6 shadow-lg">
+      <div className="flex items-center px-4 py-2 bg-white/5 border-b border-white/5">
+        <span className="text-xs font-mono text-muted-foreground">{file}</span>
+      </div>
+      <div className="p-5 overflow-x-auto">
+        <pre className="text-sm font-mono text-gray-300 leading-relaxed">
+          {code.split("\n").map((line, i) => (
+            <div key={i} className="whitespace-pre">
+              {highlightLine(line)}
+            </div>
+          ))}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Documentation content                                                      */
+/* -------------------------------------------------------------------------- */
 
 const DOCS_SECTIONS = [
   {
@@ -32,8 +89,9 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-lg leading-relaxed text-muted-foreground mb-6">
-          WebWatch lahir dari rasa frustrasi menghadapi *monitoring tools* tingkat enterprise yang
-          mahal, rumit diatur, dan penuh dengan metrik yang tidak relevan. Filosofi kami sederhana:{" "}
+          WebWatch lahir dari rasa frustrasi menghadapi <em>monitoring tools</em> tingkat enterprise
+          yang mahal, rumit diatur, dan penuh dengan metrik yang tidak relevan. Filosofi kami
+          sederhana:{" "}
           <strong>
             Pantau apa yang penting, laporkan secepat mungkin, dan jangan ganggu performa aplikasi.
           </strong>
@@ -47,9 +105,10 @@ const DOCS_SECTIONS = [
             <Globe className="h-8 w-8 text-blue-500 mb-4" />
             <h3 className="font-bold text-lg mb-2 text-foreground">Synthetic Uptime Monitoring</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Pengecekan proaktif dari luar. Server global kami melakukan ping ke situs Anda
-              (HTTP/HTTPS) setiap menit untuk mendeteksi *downtime*, latensi jaringan, atau
-              kedaluwarsa sertifikat SSL sebelum pengunjung Anda menyadarinya.
+              Pengecekan proaktif dari luar. Worker kami melakukan request HTTP/HTTPS ke situs Anda
+              secara berkala untuk mendeteksi <em>downtime</em>, mengukur <em>response time</em>,
+              memeriksa kata kunci tertentu pada body, atau memberi peringatan sertifikat SSL
+              sebelum pengunjung Anda menyadarinya.
             </p>
           </div>
           <div className="p-6 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors">
@@ -58,18 +117,18 @@ const DOCS_SECTIONS = [
               Application Performance Monitoring
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Pelaporan reaktif dari dalam. Memanfaatkan SDK ultra-ringan, sistem akan menangkap
-              *stack trace*, HTTP *context*, dan status aplikasi tepat di milidetik terjadinya
-              sebuah *crash* atau *unhandled exception*.
+              Pelaporan reaktif dari dalam. Dengan SDK ultra-ringan, sistem menangkap{" "}
+              <em>stack trace</em>, konteks HTTP (URL dan method), serta nama environment tepat di
+              milidetik terjadinya <em>crash</em> atau <em>unhandled exception</em>.
             </p>
           </div>
         </div>
         <div className="bg-primary/10 border-l-4 border-primary p-4 rounded-r-lg mb-8">
           <h4 className="font-bold text-primary mb-1">Arsitektur Edge-First</h4>
           <p className="text-sm text-primary/80">
-            Semua *ingestion layer* dibangun di atas jaringan *Edge Workers* global. Ini berarti
-            *payload* error dari user di seluruh dunia akan diterima dalam rentang latensi &lt; 50ms
-            dan diantrekan secara asinkron tanpa memblokir *thread* aplikasi Anda.
+            Seluruh <em>ingestion layer</em> dibangun di atas Cloudflare Workers. Payload error dari
+            aplikasi Anda diterima di edge terdekat dan langsung ditulis ke D1, tanpa antrean, tanpa
+            worker tambahan, dan tanpa satu pun komponen yang harus selalu berjalan di server pusat.
           </p>
         </div>
       </>
@@ -82,42 +141,56 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          Mengintegrasikan WebWatch dapat diselesaikan dalam hitungan menit. Kami merancang alur
-          kerja yang sepenuhnya *self-service*.
+          Mengintegrasikan WebWatch dapat diselesaikan dalam hitungan menit. Alurnya sepenuhnya{" "}
+          <em>self-service</em>.
         </p>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">1. Pendaftaran Domain & Autorisasi</h3>
+        <h3 className="text-xl font-bold mt-8 mb-4">1. Verifikasi Kepemilikan Domain</h3>
         <p className="text-muted-foreground mb-4">
-          Sebelum sistem mulai menerima log, Anda diwajibkan melakukan *Domain Verification*.
-          Langkah ini mencegah eksploitasi API *rate limit* Anda oleh pihak yang tidak bertanggung
-          jawab.
+          Sebelum sistem menerima log APM untuk sebuah situs, Anda harus membuktikan bahwa domain
+          tersebut benar-benar milik Anda. Tujuannya: mencegah pihak lain mengaitkan domain orang
+          lain ke akun mereka.
         </p>
-        <div className="bg-card border border-border rounded-xl p-5 font-mono text-sm text-muted-foreground space-y-3 mb-8">
-          <p className="text-foreground font-semibold">Terdapat dua metode verifikasi:</p>
-          <ul className="list-disc ml-5 space-y-2">
-            <li>
-              <strong>File Upload (Direkomendasikan):</strong> Unduh{" "}
-              <code>webwatch-verify.txt</code> dan letakkan di <code>/public</code> atau *document
-              root* Anda.
-            </li>
-            <li>
-              <strong>DNS TXT Record:</strong> Tambahkan TXT record <code>_webwatch-challenge</code>{" "}
-              dengan *value* token dari dashboard Anda.
-            </li>
-          </ul>
+        <ol className="list-decimal ml-5 space-y-2 text-muted-foreground mb-6">
+          <li>
+            Buka <strong>Uptime Monitors → situs Anda</strong> di dashboard, lalu salin token
+            verifikasi yang ditampilkan pada dialog <em>Verifikasi Domain</em>.
+          </li>
+          <li>
+            Buat file bernama <code>webwatch-verify.txt</code> di web root / document root situs
+            Anda, lalu isikan dengan token tersebut (tanpa teks tambahan).
+          </li>
+          <li>
+            Kembali ke dashboard dan klik <strong>Verifikasi</strong>.
+          </li>
+        </ol>
+        <p className="text-muted-foreground mb-6">
+          Verifikasi dilakukan dengan melakukan request{" "}
+          <code>GET &lt;url-situs-anda&gt;/webwatch-verify.txt</code> menggunakan user-agent{" "}
+          <code>WebWatch-Verifier/1.0</code> dan timeout 10 detik. Status situs berubah menjadi{" "}
+          <code>verified</code> bila isi file mengandung token yang cocok.
+        </p>
+        <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 rounded-r-lg mb-8">
+          <h4 className="font-bold text-orange-500 mb-1">Dampak verifikasi</h4>
+          <p className="text-sm text-orange-500/80">
+            Selama status masih <code>pending</code>, endpoint ingestion akan menjawab{" "}
+            <code>403 site_not_verified</code> untuk situs tersebut. Pemantauan uptime sendiri
+            <strong> tidak</strong> terhambat oleh verifikasi — Anda tetap bisa memantau domain
+            sebelum selesai memverifikasi.
+          </p>
         </div>
 
         <h3 className="text-xl font-bold mt-8 mb-4">2. Manajemen Lingkungan (Environments)</h3>
         <p className="text-muted-foreground mb-4">
-          Kami menyarankan pembuatan API Key yang berbeda untuk masing-masing lingkungan
-          (*environment*). Misalnya, pisahkan log antara <code>production</code> dan{" "}
-          <code>staging</code>.
+          Setiap environment sebaiknya memakai <strong>situs terpisah</strong> di dashboard, karena
+          API Key selalu terikat pada satu situs. Field <code>environment</code> pada tiap event APM
+          menutup kebutuhan penandaan environment.
         </p>
         <table className="w-full text-left text-sm mt-4 border-collapse">
           <thead>
             <tr className="border-b border-border/50 text-muted-foreground">
               <th className="pb-3 font-medium">Environment</th>
-              <th className="pb-3 font-medium">Saran Penggunaan API Key</th>
+              <th className="pb-3 font-medium">Saran Penggunaan</th>
               <th className="pb-3 font-medium">Alerting</th>
             </tr>
           </thead>
@@ -126,27 +199,34 @@ const DOCS_SECTIONS = [
               <td className="py-4">
                 <code>production</code>
               </td>
-              <td className="py-4">Gunakan Key khusus Prod. Wajib diamankan.</td>
-              <td className="py-4">Kirim ke grup Telegram tim *On-call*.</td>
+              <td className="py-4">Situs dan API Key khusus produksi. Wajib diamankan.</td>
+              <td className="py-4">
+                Kirim ke grup Telegram tim <em>On-call</em>.
+              </td>
             </tr>
             <tr className="border-b border-border/20">
               <td className="py-4">
                 <code>staging</code>
               </td>
-              <td className="py-4">Bebas di-rotasi. Untuk pengujian regresi.</td>
-              <td className="py-4">Dibisukan (Muted) / Grup internal.</td>
+              <td className="py-4">Situs terpisah dengan Key sendiri. Bebas di-rotasi.</td>
+              <td className="py-4">Grup internal, atau tanpa notifikasi sama sekali.</td>
             </tr>
             <tr>
               <td className="py-4">
                 <code>local</code>
               </td>
               <td className="py-4">
-                Gunakan flag <code>enabled: false</code> di SDK.
+                Jangan panggil <code>init()</code> di pengembangan lokal.
               </td>
               <td className="py-4">Tidak dikirim.</td>
             </tr>
           </tbody>
         </table>
+        <p className="text-sm text-muted-foreground mt-4">
+          Nilai environment dikirim otomatis oleh SDK dari <code>process.env.NODE_ENV</code> saat
+          tersedia, dan bernilai <code>production</code> di browser. Anda juga dapat mengirimnya
+          manual saat memanggil <code>capture()</code>.
+        </p>
       </>
     ),
   },
@@ -157,114 +237,117 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          SDK Frontend WebWatch memonitor *Global Window Error*, *Unhandled Promise Rejection*, dan
-          *React Error Boundaries*. Ukuran bundle SDK sangat kecil (~2KB gzipped).
+          SDK WebWatch adalah satu file ES module yang disajikan langsung dari deployment Anda
+          sendiri melalui <code>GET /api/public/sdk</code> — tidak ada CDN pihak ketiga yang perlu
+          dipercaya. Responsnya memakai header <code>application/javascript</code>, CORS terbuka
+          untuk semua origin, dan di-cache selama satu jam.
         </p>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Integrasi Skrip Langsung (CDN)</h3>
-        <div className="bg-[#0D1117] border border-border rounded-xl overflow-hidden mb-6 shadow-lg">
-          <div className="flex items-center px-4 py-2 bg-white/5 border-b border-white/5">
-            <span className="text-xs font-mono text-muted-foreground">index.html</span>
-          </div>
-          <div className="p-5 overflow-x-auto">
-            <pre className="text-sm font-mono text-gray-300 leading-relaxed">
-              <span className="text-gray-500">
-                {"<!-- Load secara async agar tidak memblokir render -->"}
-              </span>
-              {"n"}
-              <span className="text-blue-400">{"<script "}</span>
-              <span className="text-purple-400">async src</span>
-              <span className="text-gray-300">="</span>
-              <span className="text-green-300">https://cdn.webwatch.id/v1/sdk.js</span>
-              <span className="text-gray-300">"</span>
-              <span className="text-blue-400">{"></script>"}</span>
-              {"n"}
-              <span className="text-blue-400">{"<script>"}</span>
-              {"n"}
-              {"  "}window.webwatch = window.webwatch || [];{"n"}
-              {"  "}window.webwatch.push({"{"}
-              {"n"}
-              {"    "}
-              <span className="text-purple-400">apiKey</span>:{" "}
-              <span className="text-green-300">"ww_live_xxxxxxxxx"</span>,{"n"}
-              {"    "}
-              <span className="text-purple-400">environment</span>:{" "}
-              <span className="text-green-300">"production"</span>,{"n"}
-              {"    "}
-              <span className="text-purple-400">captureConsole</span>:{" "}
-              <span className="text-orange-300">true</span>,{"n"}
-              {"    "}
-              <span className="text-purple-400">ignoreErrors</span>: [{" "}
-              <span className="text-green-300">/Network Error/i</span>,{" "}
-              <span className="text-green-300">"ResizeObserver loop limit exceeded"</span> ],{"n"}
-              {"    "}
-              <span className="text-purple-400">sampleRate</span>:{" "}
-              <span className="text-orange-300">1.0</span>{" "}
-              <span className="text-gray-500">// 1.0 = tangkap 100% error</span>
-              {"n"}
-              {"  "}
-              {"}"});{"n"}
-              <span className="text-blue-400">{"</script>"}</span>
-            </pre>
-          </div>
-        </div>
+        <h3 className="text-xl font-bold mt-8 mb-4">Instalasi</h3>
+        <CodeBlock
+          file="main.js"
+          code={`import { WebWatch } from "https://webwatch.example/api/public/sdk";
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Integrasi React & Next.js</h3>
-        <p className="text-muted-foreground mb-4">
-          Kami menyediakan komponen *Error Boundary* terpadu untuk mencegah aplikasi React berubah
-          menjadi *blank white screen* saat komponen gagal di-*render*.
-        </p>
-        <div className="bg-[#0D1117] border border-border rounded-xl overflow-hidden mb-6 shadow-lg">
-          <div className="flex items-center px-4 py-2 bg-white/5 border-b border-white/5">
-            <span className="text-xs font-mono text-muted-foreground">App.tsx</span>
-          </div>
-          <div className="p-5 overflow-x-auto">
-            <pre className="text-sm font-mono text-gray-300 leading-relaxed">
-              <span className="text-red-400">import</span> {"{ ErrorBoundary }"}{" "}
-              <span className="text-red-400">from</span>{" "}
-              <span className="text-green-300">"@webwatch/react"</span>;{"nn"}
-              <span className="text-blue-400">function</span>{" "}
-              <span className="text-yellow-200">FallbackUI</span>({"{ error, resetError }"}) {"{"}
-              {"n"}
-              {"  "}return ({"n"}
-              {"    "}
-              <span className="text-blue-400">{"<div>"}</span>
-              {"n"}
-              {"      "}
-              <span className="text-blue-400">{"<h1>"}</span>Oops! Terjadi kesalahan sistem.
-              <span className="text-blue-400">{"</h1>"}</span>
-              {"n"}
-              {"      "}
-              <span className="text-blue-400">{"<button onClick="}</span>
-              {"{resetError}"}
-              <span className="text-blue-400">{">"}</span>Coba Lagi
-              <span className="text-blue-400">{"</button>"}</span>
-              {"n"}
-              {"    "}
-              <span className="text-blue-400">{"</div>"}</span>
-              {"n"}
-              {"  "});{"n"}
-              {"}"}
-              {"nn"}
-              <span className="text-red-400">export default function</span>{" "}
-              <span className="text-yellow-200">App</span>() {"{"}
-              {"n"}
-              {"  "}return ({"n"}
-              {"    "}
-              <span className="text-blue-400">{"<ErrorBoundary fallback="}</span>
-              {"{FallbackUI}"}
-              <span className="text-blue-400">{">"}</span>
-              {"n"}
-              {"      "}
-              <span className="text-blue-400">{"<MyComplexComponent />"}</span>
-              {"n"}
-              {"    "}
-              <span className="text-blue-400">{"</ErrorBoundary>"}</span>
-              {"n"}
-              {"  "});{"n"}
-              {"}"}
-            </pre>
-          </div>
+// API key diambil dari halaman detail situs → API Keys
+WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
+        />
+
+        <h3 className="text-xl font-bold mt-8 mb-4">Apa saja yang otomatis ditangkap?</h3>
+        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
+          <thead>
+            <tr className="border-b border-border/50 text-muted-foreground">
+              <th className="pb-3 font-medium">Sumber</th>
+              <th className="pb-3 font-medium">event_type</th>
+              <th className="pb-3 font-medium">Informasi</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>window</code> <em>error</em>
+              </td>
+              <td className="py-4">
+                <code>frontend_error</code>
+              </td>
+              <td className="py-4">Pesan error, stack trace, URL halaman saat ini.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>window</code> <em>unhandledrejection</em>
+              </td>
+              <td className="py-4">
+                <code>frontend_promise_error</code>
+              </td>
+              <td className="py-4">Alasan promise ditolak tanpa ditangani.</td>
+            </tr>
+            <tr>
+              <td className="py-4">Manual</td>
+              <td className="py-4">
+                <code>api_error</code>, <code>log</code>, …
+              </td>
+              <td className="py-4">Anda menentukan tipe, pesan, dan konteksnya.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 className="text-xl font-bold mt-8 mb-4">Pengiriman manual</h3>
+        <CodeBlock
+          file="checkout.js"
+          code={`await WebWatch.capture(
+  "api_error",
+  "Payment gateway timeout",
+  error?.stack ?? null,
+  "/api/checkout",
+  "POST"
+);`}
+        />
+
+        <h3 className="text-xl font-bold mt-8 mb-4">API SDK</h3>
+        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
+          <thead>
+            <tr className="border-b border-border/50 text-muted-foreground">
+              <th className="pb-3 font-medium">Method</th>
+              <th className="pb-3 font-medium">Deskripsi</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>init(key, endpoint?)</code>
+              </td>
+              <td className="py-4">
+                Menyimpan API key dan endpoint ingestion (default <code>/api/ingest</code>), lalu
+                memasang listener error. Panggil sekali saat aplikasi start.
+              </td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>capture(type, message, stackTrace, url, method)</code>
+              </td>
+              <td className="py-4">
+                Mengirim satu event. Tidak melakukan apa-apa bila <code>init()</code> belum
+                dipanggil. Kegagalan pengiriman selalu ditelan agar aplikasi Anda tidak pernah
+                terganggu.
+              </td>
+            </tr>
+            <tr>
+              <td className="py-4">
+                <code>expressErrorHandler()</code>
+              </td>
+              <td className="py-4">
+                Middleware Express untuk menangkap error backend. Lihat bagian berikut.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
+          <p>
+            <strong className="text-foreground">Self-hosted & same-origin.</strong> Bila endpoint
+            yang Anda berikan diawali <code>http</code>, SDK memakainya apa adanya. Bila tidak,
+            endpoint dipetakan ke <code>window.location.origin</code>, sehingga deployment
+            same-origin tanpa konfigurasi tambahan ikut berfungsi.
+          </p>
         </div>
       </>
     ),
@@ -276,79 +359,73 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          Menangkap error di backend memerlukan intersepsi HTTP *Request* untuk mendapatkan konteks
-          (URL, Headers, User ID) sebelum error dilaporkan.
+          Untuk menangkap error backend, SDK menyediakan satu middleware Express. Middleware ini
+          mengambil konteks request (URL dan method) sebelum error diteruskan ke handler bawaan
+          Express.
         </p>
 
         <h3 className="text-xl font-bold mt-8 mb-4">Express.js Middleware</h3>
         <p className="text-muted-foreground mb-4">
-          Sangat penting untuk menempatkan middleware *ErrorHandler* WebWatch{" "}
-          <strong>setelah</strong> semua rute dan middleware lainnya, tepat sebelum handler *error
-          fallback* bawaan Anda.
+          Middleware error WebWatch harus ditempatkan <strong>setelah</strong> semua route dan
+          middleware Anda, tepat sebelum handler fallback bawaan Express.
         </p>
 
-        <div className="bg-[#0D1117] border border-border rounded-xl overflow-hidden mb-6 shadow-lg">
-          <div className="flex items-center px-4 py-2 bg-white/5 border-b border-white/5">
-            <span className="text-xs font-mono text-muted-foreground">server.js</span>
-          </div>
-          <div className="p-5 overflow-x-auto">
-            <pre className="text-sm font-mono text-gray-300 leading-relaxed">
-              <span className="text-blue-400">const</span> express ={" "}
-              <span className="text-yellow-200">require</span>(
-              <span className="text-green-300">"express"</span>);{"n"}
-              <span className="text-blue-400">const</span> webwatch ={" "}
-              <span className="text-yellow-200">require</span>(
-              <span className="text-green-300">"@webwatch/node"</span>);{"nn"}
-              <span className="text-blue-400">const</span> app ={" "}
-              <span className="text-yellow-200">express</span>();{"nn"}
-              <span className="text-gray-500">// 1. Inisialisasi</span>
-              {"n"}
-              webwatch.<span className="text-yellow-200">init</span>({"{"}
-              {"n"}
-              {"  "}
-              <span className="text-purple-400">apiKey</span>: "process.env.WEBWATCH_API_KEY",{"\n"}
-              {"  "}
-              <span className="text-purple-400">environment</span>: "process.env.NODE_ENV",{"\n"}
-              {"  "}
-              <span className="text-purple-400">captureUncaught</span>:{" "}
-              <span className="text-orange-300">true</span>
-              {"n"}
-              {"}"});{"nn"}
-              <span className="text-gray-500">
-                // 2. Middleware Ingestion (Tepat di bawah parser)
-              </span>
-              {"n"}
-              app.<span className="text-yellow-200">use</span>(webwatch.Handlers.
-              <span className="text-yellow-200">requestHandler</span>());{"nn"}
-              <span className="text-gray-500">// --- Controller & Routing Aplikasi Anda ---</span>
-              {"n"}
-              app.<span className="text-yellow-200">get</span>(
-              <span className="text-green-300">"/api/data"</span>, (req, res) {"=>"} {"{"}
-              {"n"}
-              {"  "}
-              <span className="text-red-400">throw new</span>{" "}
-              <span className="text-yellow-200">Error</span>(
-              <span className="text-green-300">"Koneksi database gagal!"</span>);{"n"}
-              {"}"});{"nn"}
-              <span className="text-gray-500">
-                // 3. Middleware Error (Di akhir sebelum app.listen)
-              </span>
-              {"n"}
-              app.<span className="text-yellow-200">use</span>(webwatch.Handlers.
-              <span className="text-yellow-200">errorHandler</span>());{"nn"}
-              app.<span className="text-yellow-200">listen</span>(
-              <span className="text-orange-300">3000</span>);
-            </pre>
-          </div>
+        <CodeBlock
+          file="server.js"
+          code={`import express from "express";
+import { WebWatch } from "https://webwatch.example/api/public/sdk";
+
+const app = express();
+app.use(express.json());
+
+WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");
+
+// ... route dan controller Anda di sini ...
+
+// Terakhir: tangkap error backend
+app.use(WebWatch.expressErrorHandler());
+
+app.listen(3000);`}
+        />
+
+        <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 rounded-r-lg mt-6 mb-6">
+          <h4 className="font-bold text-orange-500 mb-1">Perhatian terhadap asynchronous error</h4>
+          <p className="text-sm text-orange-500/80">
+            Di Express 4.x, <em>promise</em> yang gagal secara <em>asynchronous</em> (seperti query
+            database di dalam route <code>async</code>) tidak otomatis tertangkap oleh error
+            middleware. Bungkus controller Anda dengan utilitas seperti{" "}
+            <code>express-async-handler</code>, atau tangkap manual dengan <code>next(err)</code>.
+          </p>
         </div>
 
-        <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 rounded-r-lg mt-6">
-          <h4 className="font-bold text-orange-500 mb-1">Perhatian terkait Asynchronous Error</h4>
-          <p className="text-sm text-orange-500/80">
-            Di Express 4.x, *promise* yang gagal secara *asynchronous* (seperti query database di
-            dalam rute `async`) tidak akan otomatis tertangkap oleh *error middleware*. Pastikan
-            Anda mem-bungkus (wrap) *controller* Anda menggunakan utilitas seperti
-            `express-async-handler` atau menangkapnya manual menggunakan `next(err)`.
+        <h3 className="text-xl font-bold mt-8 mb-4">Framework lain</h3>
+        <p className="text-muted-foreground mb-4">
+          Middleware Express hanya satu convenience. Untuk framework apa pun, panggil{" "}
+          <code>capture()</code> dari blok <code>catch</code> Anda:
+        </p>
+        <CodeBlock
+          file="handler.js"
+          code={`try {
+  await doWork();
+} catch (error) {
+  await WebWatch.capture(
+    "backend_error",
+    error.message,
+    error.stack,
+    request.url,
+    request.method
+  );
+  throw error;
+}`}
+        />
+
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
+          <p>
+            <strong className="text-foreground">Tentang paket npm.</strong> Source paket{" "}
+            <code>@webwatch/sdk</code> tersedia di folder <code>packages/webwatch-sdk</code>, namun
+            saat ini masih memakai URL ingestion placeholder dan tidak menerima parameter endpoint.
+            Untuk pemakaian nyata, gunakan modul yang disajikan dari <code>/api/public/sdk</code>{" "}
+            seperti pada contoh di atas.
           </p>
         </div>
       </>
@@ -361,8 +438,8 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          Selain menggunakan SDK, Anda bebas membangun integrasi kustom menggunakan bahasa
-          pemrograman apa pun yang mendukung HTTP *request* dengan *endpoint* REST publik kami.
+          Selain memakai SDK, Anda bebas membangun integrasi custom dengan bahasa pemrograman apa
+          pun yang bisa melakukan HTTP request ke endpoint ingestion kami.
         </p>
 
         <div className="border border-border rounded-lg overflow-hidden bg-card mb-8">
@@ -370,7 +447,7 @@ const DOCS_SECTIONS = [
             <h4 className="font-bold font-mono">
               POST{" "}
               <span className="text-muted-foreground ml-2">
-                https://ingest.webwatch.id/v1/events
+                https://webwatch.example/api/ingest
               </span>
             </h4>
           </div>
@@ -379,6 +456,10 @@ const DOCS_SECTIONS = [
             <code className="text-xs bg-black/40 px-2 py-1 rounded text-primary">
               Authorization: Bearer [API_KEY]
             </code>
+            <p className="text-xs text-muted-foreground mt-2">
+              API key dibuat per situs di halaman detail situs → <strong>API Keys</strong>, dengan
+              format <code>ww_</code> diikuti 48 karakter heksadesimal.
+            </p>
 
             <h5 className="text-sm font-semibold mt-6 mb-2">Spesifikasi Payload (JSON)</h5>
             <div className="overflow-x-auto">
@@ -393,40 +474,60 @@ const DOCS_SECTIONS = [
                 </thead>
                 <tbody className="text-muted-foreground align-top">
                   <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">event_id</td>
-                    <td className="py-3">String (UUID)</td>
+                    <td className="py-3 font-mono text-foreground">events</td>
+                    <td className="py-3">Array</td>
                     <td className="py-3 text-primary">Ya</td>
-                    <td className="py-3">ID unik untuk deduplikasi *event*. Maks. 36 karakter.</td>
+                    <td className="py-3">Daftar event yang dikirim dalam satu batch.</td>
                   </tr>
                   <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">level</td>
-                    <td className="py-3">Enum</td>
+                    <td className="py-3 font-mono text-foreground">type</td>
+                    <td className="py-3">String</td>
                     <td className="py-3 text-primary">Ya</td>
                     <td className="py-3">
-                      Nilai harus salah satu dari: <code>fatal</code>, <code>error</code>,{" "}
-                      <code>warning</code>, <code>info</code>, <code>debug</code>.
+                      Tipe event, misalnya <code>frontend_error</code>,{" "}
+                      <code>frontend_promise_error</code>, <code>backend_error</code>,{" "}
+                      <code>api_error</code>, atau <code>log</code>. Default <code>log</code>.
                     </td>
                   </tr>
                   <tr className="border-b border-border/20">
                     <td className="py-3 font-mono text-foreground">message</td>
                     <td className="py-3">String</td>
                     <td className="py-3 text-primary">Ya</td>
-                    <td className="py-3">Pesan utama *error* atau ringkasan log.</td>
+                    <td className="py-3">Pesan utama error atau ringkasan log.</td>
                   </tr>
                   <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">exception</td>
-                    <td className="py-3">Object</td>
+                    <td className="py-3 font-mono text-foreground">stack_trace</td>
+                    <td className="py-3">String</td>
                     <td className="py-3">Tidak</td>
-                    <td className="py-3">Detail *stack trace* dan nama *class exception*.</td>
+                    <td className="py-3">Jejak stack error.</td>
                   </tr>
-                  <tr>
-                    <td className="py-3 font-mono text-foreground">request</td>
-                    <td className="py-3">Object</td>
+                  <tr className="border-b border-border/20">
+                    <td className="py-3 font-mono text-foreground">url</td>
+                    <td className="py-3">String</td>
+                    <td className="py-3">Tidak</td>
+                    <td className="py-3">URL halaman atau endpoint yang bermasalah.</td>
+                  </tr>
+                  <tr className="border-b border-border/20">
+                    <td className="py-3 font-mono text-foreground">method</td>
+                    <td className="py-3">String</td>
                     <td className="py-3">Tidak</td>
                     <td className="py-3">
-                      Detail HTTP (URL, Method, Headers). Hindari menyisipkan header sensitif
-                      seperti <code>Cookie</code> atau *Token*.
+                      HTTP method, misalnya <code>GET</code> atau <code>POST</code>.
                     </td>
+                  </tr>
+                  <tr className="border-b border-border/20">
+                    <td className="py-3 font-mono text-foreground">environment</td>
+                    <td className="py-3">String</td>
+                    <td className="py-3">Tidak</td>
+                    <td className="py-3">
+                      Nama environment. Default <code>production</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 font-mono text-foreground">user_agent</td>
+                    <td className="py-3">String</td>
+                    <td className="py-3">Tidak</td>
+                    <td className="py-3">User agent klien bila Anda ingin mengirimnya.</td>
                   </tr>
                 </tbody>
               </table>
@@ -434,62 +535,218 @@ const DOCS_SECTIONS = [
           </div>
         </div>
 
+        <h3 className="text-xl font-bold mt-8 mb-4">Contoh Request & Response</h3>
+        <CodeBlock
+          file="curl"
+          code={`curl -X POST "https://webwatch.example/api/ingest" \\
+  -H "Authorization: Bearer ww_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "events": [
+      {
+        "type": "backend_error",
+        "message": "TypeError: cannot read property id of undefined",
+        "stack_trace": "TypeError: ...",
+        "url": "/api/orders/42",
+        "method": "GET",
+        "environment": "production"
+      }
+    ]
+  }'`}
+        />
+
+        <h3 className="text-xl font-bold mt-8 mb-4">Kode Respons</h3>
+        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
+          <thead>
+            <tr className="border-b border-border/50 text-muted-foreground">
+              <th className="pb-3 font-medium">Status</th>
+              <th className="pb-3 font-medium">Body</th>
+              <th className="pb-3 font-medium">Arti</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>200</code>
+              </td>
+              <td className="py-4">
+                <code>{'{ "ok": true, "ingested": 1 }'}</code>
+              </td>
+              <td className="py-4">Event berhasil disimpan.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>400</code>
+              </td>
+              <td className="py-4">
+                <code>invalid_payload</code> / <code>bad_request</code>
+              </td>
+              <td className="py-4">
+                Body JSON tidak valid atau <code>events</code> bukan array.
+              </td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>401</code>
+              </td>
+              <td className="py-4">
+                <code>missing_token</code> / <code>invalid_key</code>
+              </td>
+              <td className="py-4">Header Authorization hilang atau API key tidak dikenal.</td>
+            </tr>
+            <tr>
+              <td className="py-4">
+                <code>403</code>
+              </td>
+              <td className="py-4">
+                <code>site_not_verified</code>
+              </td>
+              <td className="py-4">Domain situs belum diverifikasi.</td>
+            </tr>
+          </tbody>
+        </table>
+
         <p className="text-sm text-muted-foreground">
-          <strong>Rate Limiting:</strong> Endpoint *ingestion* dibatasi hingga 1.000 *event* per
-          menit per API Key. *Payload* yang melebihi batas ini akan ditolak dengan status HTTP{" "}
-          <code>429 Too Many Requests</code>.
+          <strong>Catatan:</strong> endpoint ingestion mengizinkan semua origin (CORS <code>*</code>
+          ) agar SDK browser dapat mengirim dari domain pelanggan, dan saat ini belum membatasi laju
+          request secara otomatis. Bila Anda membutuhkan pembatasan, tambahkan sendiri di sisi
+          aplikasi Anda.
         </p>
       </>
     ),
   },
   {
     id: "alerting",
-    title: "Sistem Alerting & Webhook",
+    title: "Sistem Alerting & Perintah Bot",
     icon: BellRing,
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          Tujuan utama *monitoring* adalah memberi tahu Anda di saat yang tepat. WebWatch memiliki
-          *engine* alert pintar yang mencegah notifikasi ganda atau banjir notifikasi (*alert
-          fatigue*).
+          Tujuan utama <em>monitoring</em> adalah memberi tahu Anda di saat yang tepat. WebWatch
+          mengirim seluruh notifikasi melalui Telegram, dengan aturan anti-spam yang mencegah banjir
+          pesan (<em>alert fatigue</em>).
         </p>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Mekanisme Debouncing Telegram</h3>
-        <p className="text-muted-foreground mb-4">
-          Bila ada 5.000 error identik yang terjadi dalam kurun waktu 10 detik, Anda{" "}
-          <strong>tidak</strong> akan menerima 5.000 pesan Telegram. WebWatch mengelompokkan
-          (grouping) *event* yang memiliki tanda tangan (*signature*) error yang sama.
-        </p>
+        <h3 className="text-xl font-bold mt-8 mb-4">Kapan Notifikasi Dikirim?</h3>
+        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
+          <thead>
+            <tr className="border-b border-border/50 text-muted-foreground">
+              <th className="pb-3 font-medium">Pemicu</th>
+              <th className="pb-3 font-medium">Pesan</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-b border-border/20">
+              <td className="py-4">Situs gagal melewati ambang batas beruntun</td>
+              <td className="py-4">
+                🔴 <strong>DOWN</strong> — label, URL, pesan error, jumlah kegagalan, waktu UTC.
+              </td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">Situs kembali merespons berhasil</td>
+              <td className="py-4">
+                🟢 <strong>RECOVERED</strong> — label, URL, durasi downtime, waktu pemulihan.
+              </td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">Sertifikat SSL akan kedaluwarsa ≤ 7 hari</td>
+              <td className="py-4">
+                ⚠️ <strong>SSL CERTIFICATE</strong> — label, URL, sisa hari, waktu UTC.
+              </td>
+            </tr>
+            <tr>
+              <td className="py-4">Batch APM memuat event bertipe error</td>
+              <td className="py-4">
+                🚨 <strong>APM ALERT</strong> — tipe, environment, pesan, endpoint yang terkena.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 className="text-xl font-bold mt-8 mb-4">Aturan Anti-Spam</h3>
         <ul className="list-disc ml-5 space-y-2 text-muted-foreground mb-8">
           <li>
-            Pesan pertama dikirim <strong>secara instan</strong> (T+0).
+            Notifikasi <strong>DOWN</strong> dan <strong>RECOVERED</strong> untuk satu situs
+            memiliki jeda minimal <strong>10 menit</strong>. Bila kejadian lain terjadi di dalam
+            rentang tersebut, pesan ditahan sampai cooldown selesai.
           </li>
           <li>
-            Pesan peringatan kedua tentang masalah yang sama akan ditunda minimal{" "}
-            <strong>5 menit</strong>, dengan rangkuman total kemunculan baru (misal: "Error ini
-            terjadi 459x lagi").
+            Peringatan SSL hanya dikirim ulang paling cepat <strong>1 kali per 24 jam</strong> per
+            situs.
           </li>
-          <li>Setiap 1 jam, status sistem yang masih gagal (*failing*) akan diingatkan kembali.</li>
+          <li>
+            Dari satu batch APM, hanya <strong>event error pertama</strong> yang diumumkan lewat
+            Telegram. Sisanya tetap tercatat dan dapat dilihat di halaman{" "}
+            <strong>APM &amp; Issues</strong>.
+          </li>
+          <li>Notifikasi hanya dikirim ke chat Telegram yang sudah terhubung dengan akun Anda.</li>
         </ul>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Konfigurasi Custom Webhook (Enterprise)</h3>
+        <h3 className="text-xl font-bold mt-8 mb-4">Perintah Bot Telegram</h3>
         <p className="text-muted-foreground mb-4">
-          Selain Telegram, Anda dapat mengarahkan *alert* ke *channel* Slack, Discord, atau sistem
-          tiket seperti Jira/Linear menggunakan fitur Custom Webhook.
+          Bot WebWatch juga menjadi antarmuka manajemen. Kirim perintah berikut ke chat bot Anda:
         </p>
-        <div className="bg-card border border-border p-4 rounded-xl font-mono text-xs text-muted-foreground mb-4">
-          {`POST https://domain-anda.com/webhook/webwatch
+        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
+          <thead>
+            <tr className="border-b border-border/50 text-muted-foreground">
+              <th className="pb-3 font-medium">Perintah</th>
+              <th className="pb-3 font-medium">Fungsi</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/start</code>
+              </td>
+              <td className="py-4">Menghubungkan chat Telegram dengan akun Anda.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/help</code>
+              </td>
+              <td className="py-4">Menampilkan daftar perintah.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/addsite &lt;url&gt; [interval_menit]</code>
+              </td>
+              <td className="py-4">Menambahkan situs yang dipantau.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/listsite</code> · <code>/status</code>
+              </td>
+              <td className="py-4">Menampilkan daftar situs beserta statusnya.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/removesite &lt;id&gt;</code>
+              </td>
+              <td className="py-4">Menghapus situs.</td>
+            </tr>
+            <tr className="border-b border-border/20">
+              <td className="py-4">
+                <code>/pause &lt;id&gt;</code> · <code>/resume &lt;id&gt;</code>
+              </td>
+              <td className="py-4">Menjeda atau melanjutkan pemantauan.</td>
+            </tr>
+            <tr>
+              <td className="py-4">
+                <code>/history &lt;id&gt;</code>
+              </td>
+              <td className="py-4">Uptime 30 hari beserta insiden terakhir.</td>
+            </tr>
+          </tbody>
+        </table>
 
-{
-  "alert_type": "DOWNTIME_DETECTED",
-  "project_name": "Tokoku API",
-  "url": "https://api.tokoku.com/health",
-  "triggered_at": "2026-09-01T01:30:00Z",
-  "details": {
-    "status_code": 502,
-    "response_time_ms": 3200
-  }
-}`}
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
+          <p className="flex items-start gap-2">
+            <Terminal className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+            <span>
+              <code>id</code> yang dimaksud adalah 8 karakter pertama dari id situs. Pencocokan
+              dilakukan dengan prefix, dan harus menghasilkan tepat satu situs.
+            </span>
+          </p>
         </div>
       </>
     ),
@@ -501,46 +758,79 @@ const DOCS_SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground mb-6">
-          Karena kami mengumpulkan *stack trace* dan *header* *request* dari aplikasi Anda, kami
-          mematuhi standar privasi data tertinggi untuk memastikan PII (*Personal Identifiable
-          Information*) pelanggan Anda tidak bocor.
+          Karena kami mengumpulkan <em>stack trace</em> dan konteks request dari aplikasi Anda, kami
+          menjaga agar data sensitif pelanggan Anda tidak bocor.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="p-5 border border-border rounded-xl bg-card">
             <Lock className="h-6 w-6 text-primary mb-3" />
-            <h4 className="font-bold mb-2">Automated Data Scrubbing</h4>
+            <h4 className="font-bold mb-2">Tanpa Password</h4>
             <p className="text-sm text-muted-foreground">
-              Kami secara otomatis menghapus atau me-masking nilai dari header HTTP sensitif:{" "}
-              <code>authorization</code>, <code>cookie</code>, <code>x-api-key</code>, serta payload
-              *password*.
+              Tidak ada password yang disimpan maupun dipulihkan. Login memakai kode 6 digit sekali
+              pakai yang dikirim ke chat Telegram, berlaku 5 menit, dan dibatasi 5 kali percobaan.
             </p>
           </div>
           <div className="p-5 border border-border rounded-xl bg-card">
             <Layers className="h-6 w-6 text-primary mb-3" />
-            <h4 className="font-bold mb-2">Isolasi *Tenant* (RLS)</h4>
+            <h4 className="font-bold mb-2">Isolasi Tenant</h4>
             <p className="text-sm text-muted-foreground">
-              Database log dipartisi secara ketat berdasarkan API Key. Row-Level Security mencegah
-              kebocoran silang data antar pengguna platform kami.
+              Setiap data situs, insiden, event, dan API key terikat pada akun pemiliknya. Seluruh
+              query terautentikasi dijalankan dengan filter <code>user_id</code>, sehingga satu akun
+              tidak dapat membaca atau mengubah data akun lain.
             </p>
           </div>
           <div className="p-5 border border-border rounded-xl bg-card">
             <Activity className="h-6 w-6 text-primary mb-3" />
             <h4 className="font-bold mb-2">Retensi Terbatas</h4>
             <p className="text-sm text-muted-foreground">
-              Log mentah (*raw error events*) akan dihapus permanen secara sistematis (*hard
-              delete*) setelah <strong>30 hari</strong> bergulir (*rolling window*).
+              Riwayat pemeriksaan uptime dan insiden yang sudah selesai dihapus otomatis setelah{" "}
+              <strong>30 hari</strong>. Event APM disimpan sebagai arsip dan dapat dihapus manual
+              dari dashboard.
             </p>
           </div>
         </div>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Komitmen GDPR & CCPA</h3>
-        <p className="text-muted-foreground leading-relaxed">
-          Sistem kami dirancang agar beroperasi penuh sebagai *Data Processor*. Kami menyarankan
-          Anda—sebagai *Data Controller*—untuk mengonfigurasi *SDK Frontend* agar tidak mengirim
-          nama atau email pengguna secara terang (*plain-text*) ke server kami, melainkan cukup
-          mengirimkan ID samaran (*anonymized user ID*).
+        <h3 className="text-xl font-bold mt-8 mb-4">Kredensial</h3>
+        <ul className="list-disc ml-5 space-y-2 text-muted-foreground mb-8">
+          <li>Token sesi dan kode OTP disimpan dalam bentuk hash SHA-256, bukan nilai aslinya.</li>
+          <li>
+            Cookie sesi memakai flag <code>HttpOnly</code>, <code>Secure</code>, dan{" "}
+            <code>SameSite=Lax</code> dengan masa berlaku 30 hari.
+          </li>
+          <li>API key dibuat per situs dan dapat dicabut dengan menghapus key tersebut.</li>
+          <li>
+            Endpoint webhook Telegram dan endpoint cron dilindungi shared secret yang dibandingkan
+            secara timing-safe.
+          </li>
+        </ul>
+
+        <h3 className="text-xl font-bold mt-8 mb-4">CORS pada Endpoint Ingestion</h3>
+        <p className="text-muted-foreground mb-8">
+          Endpoint <code>/api/ingest</code> sengaja mengizinkan semua origin, karena SDK browser
+          mengirim dari domain pelanggan sendiri. Endpoint tersebut hanya menerima API key yang
+          valid, dan seluruh isinya dipisahkan per situs.
         </p>
+
+        <h3 className="text-xl font-bold mt-8 mb-4">Komitmen GDPR &amp; CCPA</h3>
+        <p className="text-muted-foreground leading-relaxed">
+          Sistem kami dirancang agar beroperasi penuh sebagai <em>Data Processor</em>. Kami
+          menyarankan Anda — sebagai <em>Data Controller</em> — untuk tidak mengirim nama, email,
+          atau data pribadi pengguna secara terang (<em>plain-text</em>) ke server kami. Gunakan ID
+          samaran (<em>anonymized user ID</em>), dan hapus atau sensor setiap data sensitif sebelum
+          dikirim.
+        </p>
+
+        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground mt-8">
+          <p className="flex items-start gap-2">
+            <Webhook className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+            <span>
+              Ingin memantau uptime lewat curl? Endpoint manual tersedia di{" "}
+              <code>POST /api/public/cron/run</code> dengan header <code>x-webwatch-cron</code> —
+              namun penggunaannya dibatasi untuk keperluan verifikasi.
+            </span>
+          </p>
+        </div>
       </>
     ),
   },
@@ -611,7 +901,7 @@ function DocsPage() {
 
           <div className="ml-auto hidden md:flex items-center gap-4 text-sm font-medium text-muted-foreground">
             <a
-              href="https://github.com/webwatch"
+              href="https://github.com/hsanmz/webwatch"
               className="hover:text-foreground transition-colors"
             >
               GitHub
@@ -658,7 +948,7 @@ function DocsPage() {
             </nav>
 
             <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 ml-2">
-              API & Integrasi
+              API &amp; Integrasi
             </h4>
             <nav className="space-y-1 mb-8">
               {DOCS_SECTIONS.slice(2, 5).map((item) => (
@@ -683,7 +973,7 @@ function DocsPage() {
             </nav>
 
             <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 ml-2">
-              Platform & Ops
+              Platform &amp; Ops
             </h4>
             <nav className="space-y-1">
               {DOCS_SECTIONS.slice(5).map((item) => (
@@ -695,7 +985,7 @@ function DocsPage() {
                     ${
                       activeSection === item.id
                         ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-card hover:text-foreground"
+                        : "text-muted-foreground hover:text-card hover:text-foreground"
                     }
                   `}
                 >
@@ -709,7 +999,7 @@ function DocsPage() {
 
             <div className="mt-12 pt-6 border-t border-border/50">
               <a
-                href="#"
+                href="https://github.com/hsanmz/webwatch/issues"
                 className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
@@ -717,7 +1007,7 @@ function DocsPage() {
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
                   </svg>
                 </span>
-                Support & Komunitas
+                Support &amp; Komunitas
               </a>
             </div>
           </div>
@@ -737,7 +1027,7 @@ function DocsPage() {
             <div className="mb-20">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-mono font-bold mb-6">
                 <span className="h-2 w-2 rounded-full bg-primary animate-pulse"></span>
-                v1.2.0 (Stable)
+                v1.0.0 (Stable)
               </div>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6">
                 WebWatch Documentation

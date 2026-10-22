@@ -1,100 +1,58 @@
-# WebWatch APM & Uptime Monitoring
+# WebWatch — APM & Uptime Monitoring
 
-WebWatch adalah aplikasi pemantauan website generasi baru (seperti Sentry/Datadog) yang mendukung **Application Performance Monitoring (APM)** via SDK dan **Uptime Monitoring** dari luar. Dilengkapi dengan notifikasi Telegram _real-time_!
+WebWatch is an edge-native monitoring platform that combines **synthetic uptime monitoring** with
+**Application Performance Monitoring (APM)**. It probes your URLs on a schedule, reports crashes
+from inside your application, and pushes every critical alert to Telegram the moment it happens.
 
-## Fitur Unggulan
+No passwords. No agents to install. No infrastructure to operate.
 
-- **Application Performance Monitoring (APM)** — Tangkap log dan error (Frontend & Backend) dari dalam aplikasi menggunakan WebWatch SDK (via NPM `@webwatch/sdk` atau CDN).
-- **Public Status Page & Docs** — Halaman status sistem publik terintegrasi dan dokumentasi interaktif yang rapi dengan Framer Motion.
-- **Validasi Kepemilikan Domain** — Sistem verifikasi keamanan via file `webwatch-verify.txt`.
-- **API Keys & Ingestion Server** — Server _ingest_ _batch-processing_ yang aman (Bearer token) dan _scalable_ untuk menangkap ribuan event.
-- **Pemantauan Uptime Aktif** — Cek HTTP dari luar tiap menit menggunakan Cloudflare Cron Trigger.
-- **Alert Telegram Instan** — Notifikasi saat SDK menangkap error kritis, atau saat server mati (DOWN/RECOVERED).
-- **Login OTP Telegram** — Keamanan tanpa _password_, menggunakan verifikasi chat bot Telegram.
-- **Multi-user** — Isolasi data penuh per pengguna di atas _database_ Cloudflare D1.
+---
+
+## Features
+
+- **Uptime monitoring** — HTTP(S) probes on a per-site interval (1–1440 minutes) with failure
+  thresholds, keyword assertions, and response-time tracking.
+- **APM ingestion** — a tiny browser SDK reports frontend errors, unhandled promise rejections, and
+  backend exceptions to a batch ingestion endpoint.
+- **Domain verification** — prove you own a domain by hosting a `webwatch-verify.txt` file before
+  APM telemetry is accepted for it.
+- **Telegram alerting** — instant DOWN / RECOVERED / SSL-expiry / APM-error notifications, plus a
+  full bot command interface for managing monitors on the go.
+- **Passwordless authentication** — sign in with a 6-digit code delivered to your Telegram chat.
+- **Public status page** — live platform health and metrics at `/status`.
+- **In-app documentation** — a complete guide at `/docs`.
+- **Multi-tenant by design** — every query is scoped to the authenticated account.
+
+---
 
 ## Tech stack
 
-| Lapisan         | Teknologi                                                  |
-| --------------- | ---------------------------------------------------------- |
-| Frontend / SSR  | TanStack Start (React + TanStack Router + TanStack Query)  |
-| Backend API     | Endpoint API TanStack Start + bot Telegram mode webhook    |
-| Database & Auth | Cloudflare D1 (SQLite) — session cookie + OTP via Telegram |
-| Scheduler       | Cloudflare Cron Trigger (`* * * * *`)                      |
-| Hosting         | Cloudflare Workers via Nitro (preset `cloudflare-module`)  |
-| Tooling         | Bun, TypeScript, Vite, Vitest, Tailwind CSS, Framer Motion |
+| Layer | Technology |
+| --- | --- |
+| Frontend / SSR | TanStack Start (React 19 + TanStack Router + TanStack Query) |
+| UI | Tailwind CSS v4, shadcn/ui, Radix, Framer Motion, Recharts |
+| Backend API | TanStack Start route handlers on Nitro/h3, deployed as a Cloudflare Worker |
+| Database | Cloudflare D1 (SQLite) |
+| Scheduler | A dedicated Cloudflare Worker with a `* * * * *` cron trigger |
+| Auth | Session cookie + OTP over Telegram (no passwords) |
+| Notifications | Telegram Bot API (webhook mode) |
+| Tooling | Bun, TypeScript, Vite, Vitest, ESLint, Prettier |
 
-## Arsitektur singkat
+---
 
-```
-packages/
-└── webwatch-sdk/                  # NPM package SDK untuk Node.js & Browser
-src/
-├── routes/
-│   ├── index.tsx                  # Landing page
-│   ├── docs.tsx                   # Halaman Dokumentasi interaktif
-│   ├── status.tsx                 # Halaman Public Status
-│   ├── auth.tsx                   # Login OTP via Telegram (email → link bot → kode)
-│   ├── _authenticated/
-│   │   ├── route.tsx              # Guard: cek session cookie
-│   │   ├── dashboard.tsx          # Kelola situs + status Telegram
-│   │   └── sites.$id.tsx          # Detail situs: grafik, riwayat, edit
-│   └── api/
-│       ├── auth/{otp,link-status,verify,me,logout}.ts
-│       ├── sites.ts / sites/detail.ts   # CRUD situs (auth cookie)
-│       ├── system-status.ts       # Endpoint data public status page
-│       └── public/
-│           ├── telegram/webhook.ts      # Webhook bot Telegram
-│           ├── sdk.ts                   # Ingestion endpoint untuk SDK CDN/NPM
-│           └── cron/run.ts              # Trigger manual monitor (rahasia)
-├── lib/
-│   ├── monitor-core.ts            # Logika murni: evaluasi status, cooldown, SSL (dites)
-│   ├── monitor.server.ts          # Engine monitoring + notifikasi (D1)
-│   ├── bot.server.ts              # Handler command bot Telegram (D1)
-│   ├── auth.server.ts             # OTP, session, cookie, hash
-│   ├── auth-flows.server.ts       # Handler endpoint auth
-│   ├── sites-api.server.ts        # CRUD situs (Global unique URL)
-│   ├── wrangler-env.ts            # Akses binding (env.DB) dari route handler
-│   ├── monitor-cron.ts            # Daftarkan monitor ke event `scheduled` CF
-│   └── telegram.server.ts         # Formatter pesan + kirim via Bot API
-├── types/d1.d.ts                  # Tipe ambien D1
-└── components/                    # UI + blok marketing
-```
+## Quick start
 
-Scheduler memakai worker mungil `scheduler-worker/` (Cloudflare Cron Trigger tiap menit) yang memanggil endpoint drainase main worker lewat Service Binding — karena preset `cloudflare-module` membungkus worker sehingga event `scheduled` milik kode kita sendiri tidak bisa dipakai langsung di worker utama.
-
-## Database (D1)
-
-Migrasi D1 ada di `migrations/d1/`:
+Requires [Bun](https://bun.sh) (Node.js works too) and a Cloudflare account.
 
 ```sh
-bunx wrangler d1 migrations apply webwatch --remote
-```
-
-## Environment variables
-
-Variabel di atas hanya dibutuhkan server-side (set sebagai **secret** di Cloudflare):
-
-```
-TELEGRAM_BOT_TOKEN=        # secret
-TELEGRAM_BOT_USERNAME=     # secret/var (username bot tanpa @)
-TELEGRAM_WEBHOOK_SECRET=   # secret (juga melindungi endpoint cron manual)
-```
-
-`.env` lokal cukup untuk development; jangan commit token asli.
-
-## Development
-
-Dibutuhkan [Bun](https://bun.sh) (atau Node.js).
-
-```sh
-git clone <repo-url>
-cd <repo>
+git clone https://github.com/hsanmz/webwatch.git
+cd webwatch
 bun i
 bun run dev
 ```
 
-Untuk menjalankan worker + D1 secara lokal:
+`bun run dev` starts the Vite dev server, but **Cloudflare bindings (D1) are not injected in this
+mode**. For anything that touches the database, use the full worker runtime:
 
 ```sh
 bun run build
@@ -102,77 +60,269 @@ bunx wrangler d1 migrations apply webwatch --local
 bunx wrangler dev
 ```
 
-## Script yang tersedia
+### Configuration
+
+Secrets are set as Cloudflare Worker secrets — never commit them.
 
 ```sh
-bun run dev          # dev server
-bun run build        # produksi build (Nitro, output cloudflare-module)
-bun run preview      # pratinjau hasil build
-bun run test         # vitest (unit test logika monitoring & formatter pesan)
-bunx tsc --noEmit    # typecheck
-bun run lint         # eslint
+bunx wrangler secret put TELEGRAM_BOT_TOKEN      # Bot API token from @BotFather
+bunx wrangler secret put TELEGRAM_BOT_USERNAME   # Bot username without "@"
+bunx wrangler secret put TELEGRAM_WEBHOOK_SECRET # Shared secret for webhook + cron
 ```
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | main worker | Authenticates outgoing `sendMessage` calls. |
+| `TELEGRAM_BOT_USERNAME` | main worker | Used to build `https://t.me/<bot>?start=<token>` login deep links. |
+| `TELEGRAM_WEBHOOK_SECRET` | main worker | Guards the Telegram webhook **and** the manual cron endpoint. |
+| `CRON_SECRET` | scheduler worker | Sent as `x-webwatch-cron`. Must equal `TELEGRAM_WEBHOOK_SECRET`. |
+
+---
+
+## Project structure
+
+```
+webwatch/
+├── src/
+│   ├── server.ts                    # Worker entry: captures env, normalizes h3-swallowed 500s
+│   ├── start.ts                     # TanStack Start middleware (error handler + CSRF)
+│   ├── router.tsx                   # Router factory with TanStack Query
+│   ├── styles.css                   # Tailwind v4 theme tokens (OKLCH)
+│   ├── routes/
+│   │   ├── index.tsx                # Landing page
+│   │   ├── auth.tsx                 # OTP login (email → Telegram link → code)
+│   │   ├── docs.tsx                 # In-app documentation
+│   │   ├── status.tsx               # Public status page
+│   │   ├── _authenticated/          # Guarded area: dashboard, monitors, apm, incidents, sites.$id
+│   │   └── api/                     # Route handlers (see the API reference below)
+│   ├── lib/                         # Server logic (see DESIGN.md)
+│   ├── components/{app,marketing,ui}/
+│   ├── hooks/
+│   └── types/d1.d.ts                # Ambient D1 types
+├── packages/webwatch-sdk/           # @webwatch/sdk — npm package source
+├── scheduler-worker/                # Cron worker → main worker over a service binding
+├── server/plugins/env.ts            # Nitro plugin: captures the Worker env per request
+├── migrations/d1/                   # D1 migrations (0001 … 0006)
+└── wrangler.jsonc                   # Main worker config
+```
+
+Full architecture, data model, and runtime flows: **[DESIGN.md](./DESIGN.md)**.
+
+---
+
+## Database
+
+D1 migrations live in `migrations/d1/`.
+
+```sh
+bunx wrangler d1 migrations apply webwatch --remote   # production
+bunx wrangler d1 migrations apply webwatch --local    # local dev
+```
+
+Nine tables: `users`, `sessions`, `otp_codes`, `telegram_links`, `sites`, `checks`, `incidents`,
+`api_keys`, `apm_events`. See [DESIGN.md §6](./DESIGN.md#6-data-model-cloudflare-d1) for the full
+schema.
+
+---
+
+## Scripts
+
+```sh
+bun run dev          # Vite dev server
+bun run build        # Production build (Nitro → .output/, cloudflare-module)
+bun run build:dev    # Production build in development mode
+bun run preview      # Preview the build output
+bun run test         # Vitest unit tests
+bun run lint         # ESLint
+bun run format       # Prettier write
+bunx tsc --noEmit    # Type check
+```
+
+---
+
+## SDK usage
+
+The browser SDK is served straight from your own deployment, so there is no third-party CDN to
+trust.
+
+```js
+// main.js
+import { WebWatch } from "https://webwatch.example/api/public/sdk";
+
+WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");
+```
+
+`init()` automatically captures `window.onerror` (`frontend_error`) and `unhandledrejection`
+(`frontend_promise_error`). For an Express backend:
+
+```js
+import { WebWatch } from "https://webwatch.example/api/public/sdk";
+
+WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");
+app.use(WebWatch.expressErrorHandler()); // register last
+```
+
+Manual capture is also available:
+
+```js
+await WebWatch.capture("api_error", "Payment gateway timeout", stack, "/api/pay", "POST");
+```
+
+### Manual ingestion (any language)
+
+```http
+POST https://webwatch.example/api/ingest
+Authorization: Bearer ww_your_api_key
+Content-Type: application/json
+```
+
+```json
+{
+  "events": [
+    {
+      "type": "backend_error",
+      "message": "TypeError: cannot read property 'id' of undefined",
+      "stack_trace": "TypeError: ...",
+      "url": "/api/orders/42",
+      "method": "GET",
+      "environment": "production"
+    }
+  ]
+}
+```
+
+Responses: `200 { "ok": true, "ingested": 1 }`, `401 missing_token` / `invalid_key`,
+`403 site_not_verified`, `400 invalid_payload` / `bad_request`.
+
+Create and rotate API keys from **Site detail → API Keys** in the dashboard.
+
+---
+
+## Domain verification
+
+Before a site can send APM telemetry, prove you control the domain:
+
+1. Open the site in the dashboard and copy its verification token.
+2. Create `webwatch-verify.txt` in the site's web root containing that token.
+3. Click **Verify** in the dashboard.
+
+The verifier issues `GET <site-url>/webwatch-verify.txt` with a 10-second timeout and marks the
+site `verified` when the token matches. Until then, `/api/ingest` returns
+`403 site_not_verified` for that site. Uptime monitoring is not affected by verification.
+
+---
+
+## Telegram bot
+
+| Command | Description |
+| --- | --- |
+| `/start` | Connect your Telegram chat to your account (consumes the login deep link). |
+| `/help` | List available commands. |
+| `/addsite <url> [interval_minutes]` | Add a monitored site. |
+| `/listsite`, `/status` | List your sites and their status. |
+| `/removesite <id>` | Delete a site. |
+| `/pause <id>` / `/resume <id>` | Pause or resume monitoring. |
+| `/history <id>` | 30-day uptime percentage and recent incidents. |
+
+Site ids are the first 8 characters of the site's uuid.
+
+---
+
+## API reference
+
+### Public
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/ingest` | `Bearer <api_key>` | APM batch ingestion. |
+| `GET` | `/api/public/sdk` | — | Browser SDK source. |
+| `GET` | `/api/system-status` | — | Status page payload and metrics. |
+| `POST` | `/api/public/cron/run` | `x-webwatch-cron` header | Manual monitor trigger. |
+| `POST` | `/api/public/telegram/webhook` | `x-telegram-bot-api-secret-token` header | Telegram webhook. |
+| `POST` | `/api/auth/otp` | — | Request an OTP or a Telegram deep link. |
+| `GET` | `/api/auth/link-status` | — | `?email=` → `linked` / `pending` / `expired`. |
+| `POST` | `/api/auth/verify` | — | Exchange the OTP for a session cookie. |
+| `GET` | `/api/auth/me` | session (optional) | Current user. |
+| `POST` | `/api/auth/logout` | session | Destroy the session. |
+
+### Authenticated (session cookie)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/sites` | List your sites. |
+| `POST` | `/api/sites` | Create a site (`url`, `intervalMinutes`, `failThreshold`, `keyword`, `ssl`). |
+| `PATCH` | `/api/sites` | Update settings or pause/resume. |
+| `DELETE` | `/api/sites` | Delete a site. |
+| `GET` | `/api/sites/detail?id=` | Site, 30-day checks, recent incidents. |
+| `POST` | `/api/sites/verify` | Run domain verification. |
+| `GET` `POST` | `/api/sites/keys` | List / issue API keys. |
+| `GET` | `/api/sites/events?siteId=` | APM events for a site. |
+| `GET` | `/api/sites/dashboard` | Recent events and incidents across all sites. |
+
+Errors use `{ "error": "<code>" }` — e.g. `unauthorized`, `url_taken`, `not_found`,
+`site_not_verified`, `rate_limited`.
+
+---
 
 ## Deployment
 
 ```sh
-bunx wrangler d1 migrations apply webwatch --remote   # migrasi schema D1
-bun run build                                         # build fullstack Worker
-bunx wrangler secret put TELEGRAM_BOT_TOKEN            # secret dulu (sekali)
-bunx wrangler deploy                                  # deploy main worker
-bunx wrangler deploy --config scheduler-worker/wrangler.jsonc  # deploy scheduler
+bunx wrangler d1 migrations apply webwatch --remote          # 1. schema
+bun run build                                                # 2. build
+bunx wrangler secret put TELEGRAM_BOT_TOKEN                  # 3. secrets (once)
+bunx wrangler secret put TELEGRAM_BOT_USERNAME
+bunx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+bunx wrangler deploy                                         # 4. main worker
+bunx wrangler secret put CRON_SECRET --config scheduler-worker/wrangler.jsonc
+bunx wrangler deploy --config scheduler-worker/wrangler.jsonc  # 5. scheduler
 ```
 
-Setelah deploy, daftarkan webhook Telegram:
+Deploy the scheduler **after** the main worker so its service binding resolves.
+
+Register the Telegram webhook once the worker is live:
 
 ```sh
-wrangler secret put TELEGRAM_BOT_TOKEN
-wrangler secret put TELEGRAM_BOT_USERNAME
-wrangler secret put TELEGRAM_WEBHOOK_SECRET
-wrangler deploy
-
-# lalu daftarkan webhook (token dari secret TELEGRAM_BOT_TOKEN).
-# Gunakan --data-urlencode; tambah ip_address jika resolver Telegram gagal resolve host workers.dev:
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
-  --data-urlencode "url=https://webwatch.hugoedmoundo.workers.dev/api/public/telegram/webhook" \
-  --data-urlencode "secret_token=<WEBHOOK_SECRET>"
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  --data-urlencode "url=https://webwatch.example/api/public/telegram/webhook" \
+  --data-urlencode "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
 ```
 
+### Why two workers
+
+The main worker is built with Nitro's `cloudflare-module` preset, which swallows the `scheduled`
+event — a cron trigger cannot be attached to it. `scheduler-worker/` is a tiny, framework-free
+worker with a native `* * * * *` cron that calls the main worker over a **service binding**, so
+no public egress path is involved.
+
+---
+
 ## Testing
-
-Unit test mencakup logika murni di `src/lib/`:
-
-- Evaluasi status (up/down/threshold & keyword)
-- Cooldown anti-flapping
-- Peringatan SSL (kadaluarsa / < 7 hari / throttle ulang)
-- Format pesan notifikasi Telegram (escaping label)
 
 ```sh
 bun run test
 ```
 
-## Alur login OTP
+Vitest covers the pure logic that is easiest to get subtly wrong:
 
-1. User memasukkan email → server mengecek apakah email sudah terhubung dengan chat Telegram.
-2. Belum terhubung → halaman menampilkan link `/start <token>` ke bot; saat bot ditekan, chat terhubung ke email.
-3. Server mengirim kode 6 digit ke chat Telegram (berlaku 5 menit, sekali pakai).
-4. User memasukkan kode → server membuat session (cookie `HttpOnly`) → masuk ke dashboard.
-
-## Roadmap
-
-- Fase 1 (selesai): auth OTP, kelola situs, monitoring dasar, notifikasi down/recovered.
-- Fase 2 (selesai): dashboard statistik, keyword check, SSL check, anti-flapping, grafik 24h/7d/30d, migrasi Supabase → D1.
-- Fase 3 (selesai): WebWatch SDK (NPM & CDN), halaman dokumen (Docs), status page publik.
-- Fase 4 (opsional): channel notifikasi tambahan, multi-region check.
+- status evaluation (thresholds, transitions, failure-counter reset)
+- notification cooldown
+- SSL expiry warning thresholds
+- Telegram message formatting and HTML escaping
 
 ---
 
-This project was built with [Lovable](https://lovable.dev).
+## Documentation
 
-## Build with Lovable
+| Document | Contents |
+| --- | --- |
+| [DESIGN.md](./DESIGN.md) | Architecture, data model, request flows, monitoring algorithm, security model, known gaps. |
+| [AGENTS.md](./AGENTS.md) | Conventions and invariants for contributors and coding agents. |
+| `/docs` (in-app) | User-facing integration guide. |
+| `/status` (public) | Live platform status and metrics. |
+| `src/routes/README.md` | TanStack Router file-naming conventions. |
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c3c51c42-0cd5-4d95-b8c3-f1d2bee95874).
+---
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+## License
+
+All rights reserved. See the repository for details.

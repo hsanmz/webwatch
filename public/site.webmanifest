@@ -1,0 +1,31 @@
+{
+  "name": "WebWatch — Uptime Monitor with Telegram Alerts",
+  "short_name": "WebWatch",
+  "description": "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F8FB",
+  "theme_color": "#01A471",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
