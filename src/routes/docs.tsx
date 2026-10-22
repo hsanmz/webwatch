@@ -1,78 +1,141 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useRef, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowLeft,
-  BookOpen,
-  Menu,
-  X,
-  Terminal,
-  Zap,
-  Shield,
-  Globe,
-  Server,
-  Code,
-  Layers,
   Activity,
-  Lock,
-  Webhook,
-  Database,
+  ArrowLeft,
   BellRing,
+  BookOpen,
+  Code,
+  Database,
+  Globe,
+  Layers,
+  ListChecks,
+  Lock,
+  Menu,
+  Server,
+  Shield,
+  Terminal,
+  Webhook,
+  X,
+  type LucideIcon,
 } from "lucide-react";
-import { motion } from "framer-motion";
+
+import { CodeBlock } from "@/components/app/code-block";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/docs")({
+  head: () => ({
+    meta: [
+      { title: "Dokumentasi WebWatch" },
+      {
+        name: "description",
+        content:
+          "Dokumentasi WebWatch: verifikasi domain, SDK frontend, middleware Express, REST API ingestion, dan perintah bot Telegram.",
+      },
+    ],
+  }),
   component: DocsPage,
 });
 
 /* -------------------------------------------------------------------------- */
-/*  Minimal syntax highlighter — keeps the dark code blocks readable without   */
-/*  hand-writing a <span> per token.                                           */
+/*  Prose primitives                                                          */
+/*                                                                            */
+/*  The docs page writes its own body copy, so the shared text styles live in  */
+/*  one place instead of being repeated on every paragraph. Inline code always */
+/*  uses the same chip and every table uses the shared Table primitives.       */
 /* -------------------------------------------------------------------------- */
 
-const TOKEN_RE =
-  /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:const|let|var|function|return|await|async|import|from|export|new|try|catch|finally|if|else|for|of|in|true|false|null|undefined|class|extends|throw)\b|\b\d+(?:\.\d+)?\b)/g;
-
-function highlightLine(line: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-
-  for (const match of line.matchAll(TOKEN_RE)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push(line.slice(cursor, index));
-
-    const token = match[0];
-    let className = "text-purple-400";
-    if (token.startsWith("//")) className = "text-gray-500";
-    else if (/^["'`]/.test(token)) className = "text-green-300";
-    else if (/^\d/.test(token)) className = "text-orange-300";
-
-    parts.push(
-      <span key={`${index}-${token}`} className={className}>
-        {token}
-      </span>,
-    );
-    cursor = index + token.length;
-  }
-
-  if (cursor < line.length) parts.push(line.slice(cursor));
-  return parts;
+function H3({ children }: { children: ReactNode }) {
+  return <h3 className="mb-4 mt-10 text-xl font-bold text-foreground">{children}</h3>;
 }
 
-function CodeBlock({ file, code }: { file: string; code: string }) {
+function P({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="bg-[#0D1117] border border-border rounded-xl overflow-hidden mb-6 shadow-lg">
-      <div className="flex items-center px-4 py-2 bg-white/5 border-b border-white/5">
-        <span className="text-xs font-mono text-muted-foreground">{file}</span>
-      </div>
-      <div className="p-5 overflow-x-auto">
-        <pre className="text-sm font-mono text-gray-300 leading-relaxed">
-          {code.split("\n").map((line, i) => (
-            <div key={i} className="whitespace-pre">
-              {highlightLine(line)}
-            </div>
-          ))}
-        </pre>
-      </div>
+    <p className={cn("mb-4 max-w-reading leading-relaxed text-muted-foreground", className)}>
+      {children}
+    </p>
+  );
+}
+
+function UL({ children }: { children: ReactNode }) {
+  return (
+    <ul className="mb-6 ml-5 max-w-reading list-disc space-y-2 leading-relaxed text-muted-foreground">
+      {children}
+    </ul>
+  );
+}
+
+function OL({ children }: { children: ReactNode }) {
+  return (
+    <ol className="mb-6 ml-5 max-w-reading list-decimal space-y-2 leading-relaxed text-muted-foreground">
+      {children}
+    </ol>
+  );
+}
+
+function IC({ children }: { children: ReactNode }) {
+  return (
+    <code className="rounded-xs bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
+      {children}
+    </code>
+  );
+}
+
+type CalloutTone = "brand" | "warning" | "info" | "neutral";
+
+const CALLOUT_TONES: Record<CalloutTone, { box: string; title: string; body: string }> = {
+  brand: {
+    box: "border-primary/25 bg-primary-subtle",
+    title: "text-primary",
+    body: "text-foreground/85",
+  },
+  warning: {
+    box: "border-warning/30 bg-warning-surface",
+    title: "text-warning",
+    body: "text-foreground/85",
+  },
+  info: {
+    box: "border-info/30 bg-info-surface",
+    title: "text-info",
+    body: "text-foreground/85",
+  },
+  neutral: {
+    box: "border-border bg-surface",
+    title: "text-foreground",
+    body: "text-muted-foreground",
+  },
+};
+
+function Callout({
+  tone = "neutral",
+  title,
+  icon: Icon,
+  children,
+}: {
+  tone?: CalloutTone;
+  title: string;
+  icon?: LucideIcon;
+  children: ReactNode;
+}) {
+  const styles = CALLOUT_TONES[tone];
+
+  return (
+    <div className={cn("mb-8 rounded-lg border px-4 py-4", styles.box)}>
+      <h4 className={cn("mb-1.5 flex items-center gap-2 text-sm font-semibold", styles.title)}>
+        {Icon ? <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+        {title}
+      </h4>
+      <div className={cn("text-sm leading-relaxed", styles.body)}>{children}</div>
     </div>
   );
 }
@@ -88,145 +151,146 @@ const DOCS_SECTIONS = [
     icon: BookOpen,
     content: (
       <>
-        <p className="text-lg leading-relaxed text-muted-foreground mb-6">
+        <P>
           WebWatch lahir dari rasa frustrasi menghadapi <em>monitoring tools</em> tingkat enterprise
           yang mahal, rumit diatur, dan penuh dengan metrik yang tidak relevan. Filosofi kami
           sederhana:{" "}
-          <strong>
+          <strong className="text-foreground">
             Pantau apa yang penting, laporkan secepat mungkin, dan jangan ganggu performa aplikasi.
           </strong>
-        </p>
-        <p className="text-muted-foreground mb-6">
+        </P>
+        <P>
           Sistem ini terbagi menjadi dua pilar utama yang berjalan berdampingan namun saling
-          melengkapi:
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 mb-10">
-          <div className="p-6 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors">
-            <Globe className="h-8 w-8 text-blue-500 mb-4" />
-            <h3 className="font-bold text-lg mb-2 text-foreground">Synthetic Uptime Monitoring</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+          melengkapi.
+        </P>
+
+        <div className="my-8 grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="panel p-6">
+            <Globe className="mb-4 h-7 w-7 text-primary" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">
+              Synthetic Uptime Monitoring
+            </h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Pengecekan proaktif dari luar. Worker kami melakukan request HTTP/HTTPS ke situs Anda
               secara berkala untuk mendeteksi <em>downtime</em>, mengukur <em>response time</em>,
               memeriksa kata kunci tertentu pada body, atau memberi peringatan sertifikat SSL
               sebelum pengunjung Anda menyadarinya.
             </p>
           </div>
-          <div className="p-6 rounded-xl border border-border bg-card/50 hover:bg-card transition-colors">
-            <Activity className="h-8 w-8 text-teal-500 mb-4" />
-            <h3 className="font-bold text-lg mb-2 text-foreground">
+          <div className="panel p-6">
+            <Activity className="mb-4 h-7 w-7 text-teal-700" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">
               Application Performance Monitoring
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Pelaporan reaktif dari dalam. Dengan SDK ultra-ringan, sistem menangkap{" "}
               <em>stack trace</em>, konteks HTTP (URL dan method), serta nama environment tepat di
               milidetik terjadinya <em>crash</em> atau <em>unhandled exception</em>.
             </p>
           </div>
         </div>
-        <div className="bg-primary/10 border-l-4 border-primary p-4 rounded-r-lg mb-8">
-          <h4 className="font-bold text-primary mb-1">Arsitektur Edge-First</h4>
-          <p className="text-sm text-primary/80">
-            Seluruh <em>ingestion layer</em> dibangun di atas Cloudflare Workers. Payload error dari
-            aplikasi Anda diterima di edge terdekat dan langsung ditulis ke D1, tanpa antrean, tanpa
-            worker tambahan, dan tanpa satu pun komponen yang harus selalu berjalan di server pusat.
-          </p>
-        </div>
+
+        <Callout tone="brand" title="Arsitektur edge-first">
+          Seluruh <em>ingestion layer</em> dibangun di atas Cloudflare Workers. Payload error dari
+          aplikasi Anda diterima di edge terdekat dan langsung ditulis ke D1, tanpa antrean, tanpa
+          worker tambahan, dan tanpa satu pun komponen yang harus selalu berjalan di server pusat.
+        </Callout>
       </>
     ),
   },
   {
     id: "memulai",
     title: "Langkah Awal (Setup)",
-    icon: Zap,
+    icon: ListChecks,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           Mengintegrasikan WebWatch dapat diselesaikan dalam hitungan menit. Alurnya sepenuhnya{" "}
           <em>self-service</em>.
-        </p>
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">1. Verifikasi Kepemilikan Domain</h3>
-        <p className="text-muted-foreground mb-4">
+        <H3>1. Verifikasi Kepemilikan Domain</H3>
+        <P>
           Sebelum sistem menerima log APM untuk sebuah situs, Anda harus membuktikan bahwa domain
           tersebut benar-benar milik Anda. Tujuannya: mencegah pihak lain mengaitkan domain orang
           lain ke akun mereka.
-        </p>
-        <ol className="list-decimal ml-5 space-y-2 text-muted-foreground mb-6">
+        </P>
+        <OL>
           <li>
-            Buka <strong>Uptime Monitors → situs Anda</strong> di dashboard, lalu salin token
-            verifikasi yang ditampilkan pada dialog <em>Verifikasi Domain</em>.
+            Buka <strong className="text-foreground">Uptime Monitors</strong> lalu pilih situs Anda
+            di dashboard, lalu salin token verifikasi yang ditampilkan pada dialog{" "}
+            <em>Verifikasi Domain</em>.
           </li>
           <li>
-            Buat file bernama <code>webwatch-verify.txt</code> di web root / document root situs
-            Anda, lalu isikan dengan token tersebut (tanpa teks tambahan).
+            Buat file bernama <IC>webwatch-verify.txt</IC> di web root / document root situs Anda,
+            lalu isihkan dengan token tersebut tanpa teks tambahan.
           </li>
           <li>
-            Kembali ke dashboard dan klik <strong>Verifikasi</strong>.
+            Kembali ke dashboard dan tekan <strong className="text-foreground">Verifikasi</strong>.
           </li>
-        </ol>
-        <p className="text-muted-foreground mb-6">
+        </OL>
+        <P>
           Verifikasi dilakukan dengan melakukan request{" "}
-          <code>GET &lt;url-situs-anda&gt;/webwatch-verify.txt</code> menggunakan user-agent{" "}
-          <code>WebWatch-Verifier/1.0</code> dan timeout 10 detik. Status situs berubah menjadi{" "}
-          <code>verified</code> bila isi file mengandung token yang cocok.
-        </p>
-        <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 rounded-r-lg mb-8">
-          <h4 className="font-bold text-orange-500 mb-1">Dampak verifikasi</h4>
-          <p className="text-sm text-orange-500/80">
-            Selama status masih <code>pending</code>, endpoint ingestion akan menjawab{" "}
-            <code>403 site_not_verified</code> untuk situs tersebut. Pemantauan uptime sendiri
-            <strong> tidak</strong> terhambat oleh verifikasi — Anda tetap bisa memantau domain
-            sebelum selesai memverifikasi.
-          </p>
-        </div>
+          <IC>GET &lt;url-situs-anda&gt;/webwatch-verify.txt</IC> menggunakan user-agent{" "}
+          <IC>WebWatch-Verifier/1.0</IC> dan timeout 10 detik. Status situs berubah menjadi{" "}
+          <IC>verified</IC> bila isi file mengandung token yang cocok.
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">2. Manajemen Lingkungan (Environments)</h3>
-        <p className="text-muted-foreground mb-4">
-          Setiap environment sebaiknya memakai <strong>situs terpisah</strong> di dashboard, karena
-          API Key selalu terikat pada satu situs. Field <code>environment</code> pada tiap event APM
-          menutup kebutuhan penandaan environment.
-        </p>
-        <table className="w-full text-left text-sm mt-4 border-collapse">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Environment</th>
-              <th className="pb-3 font-medium">Saran Penggunaan</th>
-              <th className="pb-3 font-medium">Alerting</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>production</code>
-              </td>
-              <td className="py-4">Situs dan API Key khusus produksi. Wajib diamankan.</td>
-              <td className="py-4">
-                Kirim ke grup Telegram tim <em>On-call</em>.
-              </td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>staging</code>
-              </td>
-              <td className="py-4">Situs terpisah dengan Key sendiri. Bebas di-rotasi.</td>
-              <td className="py-4">Grup internal, atau tanpa notifikasi sama sekali.</td>
-            </tr>
-            <tr>
-              <td className="py-4">
-                <code>local</code>
-              </td>
-              <td className="py-4">
-                Jangan panggil <code>init()</code> di pengembangan lokal.
-              </td>
-              <td className="py-4">Tidak dikirim.</td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-sm text-muted-foreground mt-4">
-          Nilai environment dikirim otomatis oleh SDK dari <code>process.env.NODE_ENV</code> saat
-          tersedia, dan bernilai <code>production</code> di browser. Anda juga dapat mengirimnya
-          manual saat memanggil <code>capture()</code>.
-        </p>
+        <Callout tone="warning" title="Dampak verifikasi">
+          Selama status masih <IC>pending</IC>, endpoint ingestion akan menjawab{" "}
+          <IC>403 site_not_verified</IC> untuk situs tersebut. Pemantauan uptime sendiri{" "}
+          <strong className="text-foreground">tidak</strong> terhambat oleh verifikasi. Anda tetap
+          bisa memantau domain sebelum selesai memverifikasi.
+        </Callout>
+
+        <H3>2. Manajemen Lingkungan (Environments)</H3>
+        <P>
+          Setiap environment sebaiknya memakai{" "}
+          <strong className="text-foreground">situs terpisah</strong> di dashboard, karena API key
+          selalu terikat pada satu situs. Field <IC>environment</IC> pada tiap event APM menutup
+          kebutuhan penandaan environment.
+        </P>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Environment</TableHead>
+              <TableHead>Saran penggunaan</TableHead>
+              <TableHead>Alerting</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>production</IC>
+              </TableCell>
+              <TableCell>Situs dan API key khusus produksi. Wajib diamankan.</TableCell>
+              <TableCell>
+                Kirim ke grup Telegram tim <em>on-call</em>.
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>staging</IC>
+              </TableCell>
+              <TableCell>Situs terpisah dengan key sendiri. Bebas di-rotasi.</TableCell>
+              <TableCell>Grup internal, atau tanpa notifikasi sama sekali.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>local</IC>
+              </TableCell>
+              <TableCell>
+                Jangan panggil <IC>init()</IC> di pengembangan lokal.
+              </TableCell>
+              <TableCell>Tidak dikirim.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <P className="mt-4 text-sm">
+          Nilai environment dikirim otomatis oleh SDK dari <IC>process.env.NODE_ENV</IC> saat
+          tersedia, dan bernilai <IC>production</IC> di browser. Anda juga dapat mengirimnya manual
+          saat memanggil <IC>capture()</IC>.
+        </P>
       </>
     ),
   },
@@ -236,63 +300,65 @@ const DOCS_SECTIONS = [
     icon: Code,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           SDK WebWatch adalah satu file ES module yang disajikan langsung dari deployment Anda
-          sendiri melalui <code>GET /api/public/sdk</code> — tidak ada CDN pihak ketiga yang perlu
-          dipercaya. Responsnya memakai header <code>application/javascript</code>, CORS terbuka
-          untuk semua origin, dan di-cache selama satu jam.
-        </p>
+          sendiri melalui <IC>GET /api/public/sdk</IC>, jadi tidak ada CDN pihak ketiga yang perlu
+          dipercaya. Responsnya memakai header <IC>application/javascript</IC>, CORS terbuka untuk
+          semua origin, dan di-cache selama satu jam.
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Instalasi</h3>
+        <H3>Instalasi</H3>
         <CodeBlock
           file="main.js"
+          className="mb-6"
           code={`import { WebWatch } from "https://webwatch.example/api/public/sdk";
 
-// API key diambil dari halaman detail situs → API Keys
+// API key diambil dari halaman detail situs, bagian API Keys
 WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
         />
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Apa saja yang otomatis ditangkap?</h3>
-        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Sumber</th>
-              <th className="pb-3 font-medium">event_type</th>
-              <th className="pb-3 font-medium">Informasi</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>window</code> <em>error</em>
-              </td>
-              <td className="py-4">
-                <code>frontend_error</code>
-              </td>
-              <td className="py-4">Pesan error, stack trace, URL halaman saat ini.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>window</code> <em>unhandledrejection</em>
-              </td>
-              <td className="py-4">
-                <code>frontend_promise_error</code>
-              </td>
-              <td className="py-4">Alasan promise ditolak tanpa ditangani.</td>
-            </tr>
-            <tr>
-              <td className="py-4">Manual</td>
-              <td className="py-4">
-                <code>api_error</code>, <code>log</code>, …
-              </td>
-              <td className="py-4">Anda menentukan tipe, pesan, dan konteksnya.</td>
-            </tr>
-          </tbody>
-        </table>
+        <H3>Apa saja yang otomatis ditangkap?</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sumber</TableHead>
+              <TableHead>event_type</TableHead>
+              <TableHead>Informasi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>window</IC> <em>error</em>
+              </TableCell>
+              <TableCell>
+                <IC>frontend_error</IC>
+              </TableCell>
+              <TableCell>Pesan error, stack trace, URL halaman saat ini.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>window</IC> <em>unhandledrejection</em>
+              </TableCell>
+              <TableCell>
+                <IC>frontend_promise_error</IC>
+              </TableCell>
+              <TableCell>Alasan promise ditolak tanpa ditangani.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Manual</TableCell>
+              <TableCell>
+                <IC>api_error</IC>, <IC>log</IC>
+              </TableCell>
+              <TableCell>Anda menentukan tipe, pesan, dan konteksnya.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Pengiriman manual</h3>
+        <H3>Pengiriman manual</H3>
         <CodeBlock
           file="checkout.js"
+          className="mb-6"
           code={`await WebWatch.capture(
   "api_error",
   "Payment gateway timeout",
@@ -302,53 +368,51 @@ WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
 );`}
         />
 
-        <h3 className="text-xl font-bold mt-8 mb-4">API SDK</h3>
-        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Method</th>
-              <th className="pb-3 font-medium">Deskripsi</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>init(key, endpoint?)</code>
-              </td>
-              <td className="py-4">
-                Menyimpan API key dan endpoint ingestion (default <code>/api/ingest</code>), lalu
+        <H3>API SDK</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Method</TableHead>
+              <TableHead>Deskripsi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>init(key, endpoint?)</IC>
+              </TableCell>
+              <TableCell>
+                Menyimpan API key dan endpoint ingestion (default <IC>/api/ingest</IC>), lalu
                 memasang listener error. Panggil sekali saat aplikasi start.
-              </td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>capture(type, message, stackTrace, url, method)</code>
-              </td>
-              <td className="py-4">
-                Mengirim satu event. Tidak melakukan apa-apa bila <code>init()</code> belum
-                dipanggil. Kegagalan pengiriman selalu ditelan agar aplikasi Anda tidak pernah
-                terganggu.
-              </td>
-            </tr>
-            <tr>
-              <td className="py-4">
-                <code>expressErrorHandler()</code>
-              </td>
-              <td className="py-4">
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>capture(type, message, stackTrace, url, method)</IC>
+              </TableCell>
+              <TableCell>
+                Mengirim satu event. Tidak melakukan apa-apa bila <IC>init()</IC> belum dipanggil.
+                Kegagalan pengiriman selalu ditelan agar aplikasi Anda tidak pernah terganggu.
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>expressErrorHandler()</IC>
+              </TableCell>
+              <TableCell>
                 Middleware Express untuk menangkap error backend. Lihat bagian berikut.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
 
-        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
+        <Callout tone="neutral" title="Self-hosted dan same-origin">
           <p>
-            <strong className="text-foreground">Self-hosted & same-origin.</strong> Bila endpoint
-            yang Anda berikan diawali <code>http</code>, SDK memakainya apa adanya. Bila tidak,
-            endpoint dipetakan ke <code>window.location.origin</code>, sehingga deployment
+            Bila endpoint yang Anda berikan diawali <IC>http</IC>, SDK memakainya apa adanya. Bila
+            tidak, endpoint dipetakan ke <IC>window.location.origin</IC>, sehingga deployment
             same-origin tanpa konfigurasi tambahan ikut berfungsi.
           </p>
-        </div>
+        </Callout>
       </>
     ),
   },
@@ -358,20 +422,21 @@ WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
     icon: Server,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           Untuk menangkap error backend, SDK menyediakan satu middleware Express. Middleware ini
           mengambil konteks request (URL dan method) sebelum error diteruskan ke handler bawaan
           Express.
-        </p>
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Express.js Middleware</h3>
-        <p className="text-muted-foreground mb-4">
-          Middleware error WebWatch harus ditempatkan <strong>setelah</strong> semua route dan
-          middleware Anda, tepat sebelum handler fallback bawaan Express.
-        </p>
-
+        <H3>Express.js Middleware</H3>
+        <P>
+          Middleware error WebWatch harus ditempatkan{" "}
+          <strong className="text-foreground">setelah</strong> semua route dan middleware Anda,
+          tepat sebelum handler fallback bawaan Express.
+        </P>
         <CodeBlock
           file="server.js"
+          className="mb-6"
           code={`import express from "express";
 import { WebWatch } from "https://webwatch.example/api/public/sdk";
 
@@ -388,23 +453,21 @@ app.use(WebWatch.expressErrorHandler());
 app.listen(3000);`}
         />
 
-        <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 rounded-r-lg mt-6 mb-6">
-          <h4 className="font-bold text-orange-500 mb-1">Perhatian terhadap asynchronous error</h4>
-          <p className="text-sm text-orange-500/80">
-            Di Express 4.x, <em>promise</em> yang gagal secara <em>asynchronous</em> (seperti query
-            database di dalam route <code>async</code>) tidak otomatis tertangkap oleh error
-            middleware. Bungkus controller Anda dengan utilitas seperti{" "}
-            <code>express-async-handler</code>, atau tangkap manual dengan <code>next(err)</code>.
-          </p>
-        </div>
+        <Callout tone="warning" title="Perhatian terhadap asynchronous error">
+          Di Express 4.x, <em>promise</em> yang gagal secara <em>asynchronous</em>, seperti query
+          database di dalam route <IC>async</IC>, tidak otomatis tertangkap oleh error middleware.
+          Bungkus controller Anda dengan utilitas seperti <IC>express-async-handler</IC>, atau
+          tangkap manual dengan <IC>next(err)</IC>.
+        </Callout>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Framework lain</h3>
-        <p className="text-muted-foreground mb-4">
-          Middleware Express hanya satu convenience. Untuk framework apa pun, panggil{" "}
-          <code>capture()</code> dari blok <code>catch</code> Anda:
-        </p>
+        <H3>Framework lain</H3>
+        <P>
+          Middleware Express hanyalah salah satu pintasan. Untuk framework apa pun, panggil{" "}
+          <IC>capture()</IC> dari blok <IC>catch</IC> Anda:
+        </P>
         <CodeBlock
           file="handler.js"
+          className="mb-6"
           code={`try {
   await doWork();
 } catch (error) {
@@ -419,15 +482,14 @@ app.listen(3000);`}
 }`}
         />
 
-        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
+        <Callout tone="neutral" title="Tentang paket npm">
           <p>
-            <strong className="text-foreground">Tentang paket npm.</strong> Source paket{" "}
-            <code>@webwatch/sdk</code> tersedia di folder <code>packages/webwatch-sdk</code>, namun
-            saat ini masih memakai URL ingestion placeholder dan tidak menerima parameter endpoint.
-            Untuk pemakaian nyata, gunakan modul yang disajikan dari <code>/api/public/sdk</code>{" "}
-            seperti pada contoh di atas.
+            Source paket <IC>@webwatch/sdk</IC> tersedia di folder <IC>packages/webwatch-sdk</IC>,
+            namun saat ini masih memakai URL ingestion placeholder dan tidak menerima parameter
+            endpoint. Untuk pemakaian nyata, gunakan modul yang disajikan dari{" "}
+            <IC>/api/public/sdk</IC> seperti pada contoh di atas.
           </p>
-        </div>
+        </Callout>
       </>
     ),
   },
@@ -437,107 +499,111 @@ app.listen(3000);`}
     icon: Database,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           Selain memakai SDK, Anda bebas membangun integrasi custom dengan bahasa pemrograman apa
           pun yang bisa melakukan HTTP request ke endpoint ingestion kami.
-        </p>
+        </P>
 
-        <div className="border border-border rounded-lg overflow-hidden bg-card mb-8">
-          <div className="p-4 border-b border-border bg-muted/30">
-            <h4 className="font-bold font-mono">
+        <div className="panel mb-8 overflow-hidden">
+          <div className="border-b border-border bg-muted/60 px-4 py-3">
+            <h4 className="font-mono text-sm font-semibold text-foreground">
               POST{" "}
-              <span className="text-muted-foreground ml-2">
+              <span className="ml-2 font-normal text-muted-foreground">
                 https://webwatch.example/api/ingest
               </span>
             </h4>
           </div>
-          <div className="p-4">
-            <h5 className="text-sm font-semibold mb-2">Autentikasi Header</h5>
-            <code className="text-xs bg-black/40 px-2 py-1 rounded text-primary">
-              Authorization: Bearer [API_KEY]
-            </code>
-            <p className="text-xs text-muted-foreground mt-2">
-              API key dibuat per situs di halaman detail situs → <strong>API Keys</strong>, dengan
-              format <code>ww_</code> diikuti 48 karakter heksadesimal.
-            </p>
+          <div className="space-y-6 px-4 py-4">
+            <div>
+              <h5 className="mb-2 text-sm font-semibold text-foreground">Autentikasi header</h5>
+              <CodeBlock className="mb-2" code={`Authorization: Bearer [API_KEY]`} />
+              <p className="text-sm text-muted-foreground">
+                API key dibuat per situs di halaman detail situs, pada bagian{" "}
+                <strong className="text-foreground">API Keys</strong>, dengan format <IC>ww_</IC>{" "}
+                diikuti 48 karakter heksadesimal.
+              </p>
+            </div>
 
-            <h5 className="text-sm font-semibold mt-6 mb-2">Spesifikasi Payload (JSON)</h5>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-border/50 text-muted-foreground">
-                    <th className="pb-2 font-medium">Properti</th>
-                    <th className="pb-2 font-medium">Tipe</th>
-                    <th className="pb-2 font-medium">Wajib</th>
-                    <th className="pb-2 font-medium">Deskripsi</th>
-                  </tr>
-                </thead>
-                <tbody className="text-muted-foreground align-top">
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">events</td>
-                    <td className="py-3">Array</td>
-                    <td className="py-3 text-primary">Ya</td>
-                    <td className="py-3">Daftar event yang dikirim dalam satu batch.</td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">type</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3 text-primary">Ya</td>
-                    <td className="py-3">
-                      Tipe event, misalnya <code>frontend_error</code>,{" "}
-                      <code>frontend_promise_error</code>, <code>backend_error</code>,{" "}
-                      <code>api_error</code>, atau <code>log</code>. Default <code>log</code>.
-                    </td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">message</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3 text-primary">Ya</td>
-                    <td className="py-3">Pesan utama error atau ringkasan log.</td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">stack_trace</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3">Tidak</td>
-                    <td className="py-3">Jejak stack error.</td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">url</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3">Tidak</td>
-                    <td className="py-3">URL halaman atau endpoint yang bermasalah.</td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">method</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3">Tidak</td>
-                    <td className="py-3">
-                      HTTP method, misalnya <code>GET</code> atau <code>POST</code>.
-                    </td>
-                  </tr>
-                  <tr className="border-b border-border/20">
-                    <td className="py-3 font-mono text-foreground">environment</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3">Tidak</td>
-                    <td className="py-3">
-                      Nama environment. Default <code>production</code>.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 font-mono text-foreground">user_agent</td>
-                    <td className="py-3">String</td>
-                    <td className="py-3">Tidak</td>
-                    <td className="py-3">User agent klien bila Anda ingin mengirimnya.</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div>
+              <h5 className="mb-2 text-sm font-semibold text-foreground">
+                Spesifikasi payload (JSON)
+              </h5>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Properti</TableHead>
+                    <TableHead>Tipe</TableHead>
+                    <TableHead>Wajib</TableHead>
+                    <TableHead>Deskripsi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">events</TableCell>
+                    <TableCell>Array</TableCell>
+                    <TableCell className="text-primary">Ya</TableCell>
+                    <TableCell>Daftar event yang dikirim dalam satu batch.</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">type</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell className="text-primary">Ya</TableCell>
+                    <TableCell>
+                      Tipe event, misalnya <IC>frontend_error</IC>, <IC>frontend_promise_error</IC>,{" "}
+                      <IC>backend_error</IC>, <IC>api_error</IC>, atau <IC>log</IC>. Default{" "}
+                      <IC>log</IC>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">message</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell className="text-primary">Ya</TableCell>
+                    <TableCell>Pesan utama error atau ringkasan log.</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">stack_trace</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell>Tidak</TableCell>
+                    <TableCell>Jejak stack error.</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">url</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell>Tidak</TableCell>
+                    <TableCell>URL halaman atau endpoint yang bermasalah.</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">method</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell>Tidak</TableCell>
+                    <TableCell>
+                      HTTP method, misalnya <IC>GET</IC> atau <IC>POST</IC>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">environment</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell>Tidak</TableCell>
+                    <TableCell>
+                      Nama environment. Default <IC>production</IC>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-mono text-foreground">user_agent</TableCell>
+                    <TableCell>String</TableCell>
+                    <TableCell>Tidak</TableCell>
+                    <TableCell>User agent klien bila Anda ingin mengirimnya.</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Contoh Request & Response</h3>
+        <H3>Contoh request dan response</H3>
         <CodeBlock
           file="curl"
+          className="mb-6"
           code={`curl -X POST "https://webwatch.example/api/ingest" \\
   -H "Authorization: Bearer ww_your_api_key" \\
   -H "Content-Type: application/json" \\
@@ -555,63 +621,63 @@ app.listen(3000);`}
   }'`}
         />
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Kode Respons</h3>
-        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Status</th>
-              <th className="pb-3 font-medium">Body</th>
-              <th className="pb-3 font-medium">Arti</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>200</code>
-              </td>
-              <td className="py-4">
-                <code>{'{ "ok": true, "ingested": 1 }'}</code>
-              </td>
-              <td className="py-4">Event berhasil disimpan.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>400</code>
-              </td>
-              <td className="py-4">
-                <code>invalid_payload</code> / <code>bad_request</code>
-              </td>
-              <td className="py-4">
-                Body JSON tidak valid atau <code>events</code> bukan array.
-              </td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>401</code>
-              </td>
-              <td className="py-4">
-                <code>missing_token</code> / <code>invalid_key</code>
-              </td>
-              <td className="py-4">Header Authorization hilang atau API key tidak dikenal.</td>
-            </tr>
-            <tr>
-              <td className="py-4">
-                <code>403</code>
-              </td>
-              <td className="py-4">
-                <code>site_not_verified</code>
-              </td>
-              <td className="py-4">Domain situs belum diverifikasi.</td>
-            </tr>
-          </tbody>
-        </table>
+        <H3>Kode respons</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead>Body</TableHead>
+              <TableHead>Arti</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>200</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{ "ok": true, "ingested": 1 }'}</IC>
+              </TableCell>
+              <TableCell>Event berhasil disimpan.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>400</IC>
+              </TableCell>
+              <TableCell>
+                <IC>invalid_payload</IC> atau <IC>bad_request</IC>
+              </TableCell>
+              <TableCell>
+                Body JSON tidak valid atau <IC>events</IC> bukan array.
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>401</IC>
+              </TableCell>
+              <TableCell>
+                <IC>missing_token</IC> atau <IC>invalid_key</IC>
+              </TableCell>
+              <TableCell>Header Authorization hilang atau API key tidak dikenal.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>403</IC>
+              </TableCell>
+              <TableCell>
+                <IC>site_not_verified</IC>
+              </TableCell>
+              <TableCell>Domain situs belum diverifikasi.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
 
-        <p className="text-sm text-muted-foreground">
-          <strong>Catatan:</strong> endpoint ingestion mengizinkan semua origin (CORS <code>*</code>
-          ) agar SDK browser dapat mengirim dari domain pelanggan, dan saat ini belum membatasi laju
-          request secara otomatis. Bila Anda membutuhkan pembatasan, tambahkan sendiri di sisi
-          aplikasi Anda.
-        </p>
+        <P className="text-sm">
+          <strong className="text-foreground">Catatan:</strong> endpoint ingestion mengizinkan semua
+          origin (CORS <IC>*</IC>) agar SDK browser dapat mengirim dari domain pelanggan, dan saat
+          ini belum membatasi laju request secara otomatis. Bila Anda membutuhkan pembatasan,
+          tambahkan sendiri di sisi aplikasi Anda.
+        </P>
       </>
     ),
   },
@@ -621,133 +687,142 @@ app.listen(3000);`}
     icon: BellRing,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           Tujuan utama <em>monitoring</em> adalah memberi tahu Anda di saat yang tepat. WebWatch
           mengirim seluruh notifikasi melalui Telegram, dengan aturan anti-spam yang mencegah banjir
           pesan (<em>alert fatigue</em>).
-        </p>
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Kapan Notifikasi Dikirim?</h3>
-        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Pemicu</th>
-              <th className="pb-3 font-medium">Pesan</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">Situs gagal melewati ambang batas beruntun</td>
-              <td className="py-4">
-                🔴 <strong>DOWN</strong> — label, URL, pesan error, jumlah kegagalan, waktu UTC.
-              </td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">Situs kembali merespons berhasil</td>
-              <td className="py-4">
-                🟢 <strong>RECOVERED</strong> — label, URL, durasi downtime, waktu pemulihan.
-              </td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">Sertifikat SSL akan kedaluwarsa ≤ 7 hari</td>
-              <td className="py-4">
-                ⚠️ <strong>SSL CERTIFICATE</strong> — label, URL, sisa hari, waktu UTC.
-              </td>
-            </tr>
-            <tr>
-              <td className="py-4">Batch APM memuat event bertipe error</td>
-              <td className="py-4">
-                🚨 <strong>APM ALERT</strong> — tipe, environment, pesan, endpoint yang terkena.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <H3>Kapan notifikasi dikirim?</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Pemicu</TableHead>
+              <TableHead>Pesan</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>Situs gagal melewati ambang batas beruntun</TableCell>
+              <TableCell>
+                <Badge variant="danger">DOWN</Badge>{" "}
+                <span className="text-muted-foreground">
+                  label, URL, pesan error, jumlah kegagalan, waktu UTC.
+                </span>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Situs kembali merespons berhasil</TableCell>
+              <TableCell>
+                <Badge variant="success">RECOVERED</Badge>{" "}
+                <span className="text-muted-foreground">
+                  label, URL, durasi downtime, waktu pemulihan.
+                </span>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Sertifikat SSL akan kedaluwarsa 7 hari atau kurang</TableCell>
+              <TableCell>
+                <Badge variant="warning">SSL CERTIFICATE</Badge>{" "}
+                <span className="text-muted-foreground">label, URL, sisa hari, waktu UTC.</span>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Batch APM memuat event bertipe error</TableCell>
+              <TableCell>
+                <Badge variant="info">APM ALERT</Badge>{" "}
+                <span className="text-muted-foreground">
+                  tipe, environment, pesan, endpoint yang terkena.
+                </span>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Aturan Anti-Spam</h3>
-        <ul className="list-disc ml-5 space-y-2 text-muted-foreground mb-8">
+        <H3>Aturan anti-spam</H3>
+        <UL>
           <li>
-            Notifikasi <strong>DOWN</strong> dan <strong>RECOVERED</strong> untuk satu situs
-            memiliki jeda minimal <strong>10 menit</strong>. Bila kejadian lain terjadi di dalam
-            rentang tersebut, pesan ditahan sampai cooldown selesai.
+            Notifikasi <strong className="text-foreground">DOWN</strong> dan{" "}
+            <strong className="text-foreground">RECOVERED</strong> untuk satu situs memiliki jeda
+            minimal <strong className="text-foreground">10 menit</strong>. Bila kejadian lain
+            terjadi di dalam rentang tersebut, pesan ditahan sampai cooldown selesai.
           </li>
           <li>
-            Peringatan SSL hanya dikirim ulang paling cepat <strong>1 kali per 24 jam</strong> per
-            situs.
+            Peringatan SSL hanya dikirim ulang paling cepat{" "}
+            <strong className="text-foreground">1 kali per 24 jam</strong> per situs.
           </li>
           <li>
-            Dari satu batch APM, hanya <strong>event error pertama</strong> yang diumumkan lewat
+            Dari satu batch APM, hanya{" "}
+            <strong className="text-foreground">event error pertama</strong> yang diumumkan lewat
             Telegram. Sisanya tetap tercatat dan dapat dilihat di halaman{" "}
-            <strong>APM &amp; Issues</strong>.
+            <strong className="text-foreground">APM &amp; Issues</strong>.
           </li>
           <li>Notifikasi hanya dikirim ke chat Telegram yang sudah terhubung dengan akun Anda.</li>
-        </ul>
+        </UL>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Perintah Bot Telegram</h3>
-        <p className="text-muted-foreground mb-4">
-          Bot WebWatch juga menjadi antarmuka manajemen. Kirim perintah berikut ke chat bot Anda:
-        </p>
-        <table className="w-full text-left text-sm mt-4 border-collapse mb-6">
-          <thead>
-            <tr className="border-b border-border/50 text-muted-foreground">
-              <th className="pb-3 font-medium">Perintah</th>
-              <th className="pb-3 font-medium">Fungsi</th>
-            </tr>
-          </thead>
-          <tbody className="text-foreground/80">
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/start</code>
-              </td>
-              <td className="py-4">Menghubungkan chat Telegram dengan akun Anda.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/help</code>
-              </td>
-              <td className="py-4">Menampilkan daftar perintah.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/addsite &lt;url&gt; [interval_menit]</code>
-              </td>
-              <td className="py-4">Menambahkan situs yang dipantau.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/listsite</code> · <code>/status</code>
-              </td>
-              <td className="py-4">Menampilkan daftar situs beserta statusnya.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/removesite &lt;id&gt;</code>
-              </td>
-              <td className="py-4">Menghapus situs.</td>
-            </tr>
-            <tr className="border-b border-border/20">
-              <td className="py-4">
-                <code>/pause &lt;id&gt;</code> · <code>/resume &lt;id&gt;</code>
-              </td>
-              <td className="py-4">Menjeda atau melanjutkan pemantauan.</td>
-            </tr>
-            <tr>
-              <td className="py-4">
-                <code>/history &lt;id&gt;</code>
-              </td>
-              <td className="py-4">Uptime 30 hari beserta insiden terakhir.</td>
-            </tr>
-          </tbody>
-        </table>
+        <H3>Perintah bot Telegram</H3>
+        <P>
+          Bot WebWatch juga menjadi antarmuka manajemen. Kirim perintah berikut ke chat bot Anda.
+        </P>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Perintah</TableHead>
+              <TableHead>Fungsi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>/start</IC>
+              </TableCell>
+              <TableCell>Menghubungkan chat Telegram dengan akun Anda.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/help</IC>
+              </TableCell>
+              <TableCell>Menampilkan daftar perintah.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/addsite &lt;url&gt; [interval_menit]</IC>
+              </TableCell>
+              <TableCell>Menambahkan situs yang dipantau.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/listsite</IC> atau <IC>/status</IC>
+              </TableCell>
+              <TableCell>Menampilkan daftar situs beserta statusnya.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/removesite &lt;id&gt;</IC>
+              </TableCell>
+              <TableCell>Menghapus situs.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/pause &lt;id&gt;</IC> atau <IC>/resume &lt;id&gt;</IC>
+              </TableCell>
+              <TableCell>Menjeda atau melanjutkan pemantauan.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/history &lt;id&gt;</IC>
+              </TableCell>
+              <TableCell>Uptime 30 hari beserta insiden terakhir.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
 
-        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
-          <p className="flex items-start gap-2">
-            <Terminal className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
-            <span>
-              <code>id</code> yang dimaksud adalah 8 karakter pertama dari id situs. Pencocokan
-              dilakukan dengan prefix, dan harus menghasilkan tepat satu situs.
-            </span>
+        <Callout tone="neutral" title="Cara identifier situs dibaca" icon={Terminal}>
+          <p>
+            <IC>id</IC> yang dimaksud adalah 8 karakter pertama dari id situs. Pencocokan dilakukan
+            dengan prefix, dan harus menghasilkan tepat satu situs.
           </p>
-        </div>
+        </Callout>
       </>
     ),
   },
@@ -757,323 +832,311 @@ app.listen(3000);`}
     icon: Shield,
     content: (
       <>
-        <p className="text-muted-foreground mb-6">
+        <P>
           Karena kami mengumpulkan <em>stack trace</em> dan konteks request dari aplikasi Anda, kami
           menjaga agar data sensitif pelanggan Anda tidak bocor.
-        </p>
+        </P>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="p-5 border border-border rounded-xl bg-card">
-            <Lock className="h-6 w-6 text-primary mb-3" />
-            <h4 className="font-bold mb-2">Tanpa Password</h4>
-            <p className="text-sm text-muted-foreground">
+        <div className="my-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="panel p-5">
+            <Lock className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">Tanpa password</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Tidak ada password yang disimpan maupun dipulihkan. Login memakai kode 6 digit sekali
               pakai yang dikirim ke chat Telegram, berlaku 5 menit, dan dibatasi 5 kali percobaan.
             </p>
           </div>
-          <div className="p-5 border border-border rounded-xl bg-card">
-            <Layers className="h-6 w-6 text-primary mb-3" />
-            <h4 className="font-bold mb-2">Isolasi Tenant</h4>
-            <p className="text-sm text-muted-foreground">
+          <div className="panel p-5">
+            <Layers className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">Isolasi tenant</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Setiap data situs, insiden, event, dan API key terikat pada akun pemiliknya. Seluruh
-              query terautentikasi dijalankan dengan filter <code>user_id</code>, sehingga satu akun
+              query terautentikasi dijalankan dengan filter <IC>user_id</IC>, sehingga satu akun
               tidak dapat membaca atau mengubah data akun lain.
             </p>
           </div>
-          <div className="p-5 border border-border rounded-xl bg-card">
-            <Activity className="h-6 w-6 text-primary mb-3" />
-            <h4 className="font-bold mb-2">Retensi Terbatas</h4>
-            <p className="text-sm text-muted-foreground">
+          <div className="panel p-5">
+            <Activity className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">Retensi terbatas</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Riwayat pemeriksaan uptime dan insiden yang sudah selesai dihapus otomatis setelah{" "}
-              <strong>30 hari</strong>. Event APM disimpan sebagai arsip dan dapat dihapus manual
-              dari dashboard.
+              <strong className="text-foreground">30 hari</strong>. Event APM disimpan sebagai arsip
+              dan dapat dihapus manual dari dashboard.
             </p>
           </div>
         </div>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Kredensial</h3>
-        <ul className="list-disc ml-5 space-y-2 text-muted-foreground mb-8">
+        <H3>Kredensial</H3>
+        <UL>
           <li>Token sesi dan kode OTP disimpan dalam bentuk hash SHA-256, bukan nilai aslinya.</li>
           <li>
-            Cookie sesi memakai flag <code>HttpOnly</code>, <code>Secure</code>, dan{" "}
-            <code>SameSite=Lax</code> dengan masa berlaku 30 hari.
+            Cookie sesi memakai flag <IC>HttpOnly</IC>, <IC>Secure</IC>, dan <IC>SameSite=Lax</IC>{" "}
+            dengan masa berlaku 30 hari.
           </li>
           <li>API key dibuat per situs dan dapat dicabut dengan menghapus key tersebut.</li>
           <li>
             Endpoint webhook Telegram dan endpoint cron dilindungi shared secret yang dibandingkan
             secara timing-safe.
           </li>
-        </ul>
+        </UL>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">CORS pada Endpoint Ingestion</h3>
-        <p className="text-muted-foreground mb-8">
-          Endpoint <code>/api/ingest</code> sengaja mengizinkan semua origin, karena SDK browser
+        <H3>CORS pada endpoint ingestion</H3>
+        <P>
+          Endpoint <IC>/api/ingest</IC> sengaja mengizinkan semua origin, karena SDK browser
           mengirim dari domain pelanggan sendiri. Endpoint tersebut hanya menerima API key yang
           valid, dan seluruh isinya dipisahkan per situs.
-        </p>
+        </P>
 
-        <h3 className="text-xl font-bold mt-8 mb-4">Komitmen GDPR &amp; CCPA</h3>
-        <p className="text-muted-foreground leading-relaxed">
+        <H3>Komitmen GDPR &amp; CCPA</H3>
+        <P>
           Sistem kami dirancang agar beroperasi penuh sebagai <em>Data Processor</em>. Kami
-          menyarankan Anda — sebagai <em>Data Controller</em> — untuk tidak mengirim nama, email,
-          atau data pribadi pengguna secara terang (<em>plain-text</em>) ke server kami. Gunakan ID
+          menyarankan Anda, sebagai <em>Data Controller</em>, untuk tidak mengirim nama, email, atau
+          data pribadi pengguna secara terang (<em>plain-text</em>) ke server kami. Gunakan ID
           samaran (<em>anonymized user ID</em>), dan hapus atau sensor setiap data sensitif sebelum
           dikirim.
-        </p>
+        </P>
 
-        <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground mt-8">
-          <p className="flex items-start gap-2">
-            <Webhook className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
-            <span>
-              Ingin memantau uptime lewat curl? Endpoint manual tersedia di{" "}
-              <code>POST /api/public/cron/run</code> dengan header <code>x-webwatch-cron</code> —
-              namun penggunaannya dibatasi untuk keperluan verifikasi.
-            </span>
+        <Callout tone="neutral" title="Endpoint cron untuk verifikasi" icon={Webhook}>
+          <p>
+            Ingin memantau uptime lewat curl? Endpoint manual tersedia di{" "}
+            <IC>POST /api/public/cron/run</IC> dengan header <IC>x-webwatch-cron</IC>. Endpoint ini
+            hanya dipakai untuk keperluan verifikasi.
           </p>
-        </div>
+        </Callout>
       </>
     ),
   },
 ];
 
-function DocsPage() {
-  const [activeSection, setActiveSection] = useState(DOCS_SECTIONS[0]?.id || "prolog");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
+const NAV_GROUPS = [
+  { label: "Mulai", ids: ["prolog", "memulai"] },
+  { label: "Integrasi", ids: ["sdk-frontend", "backend-nodejs", "rest-api"] },
+  { label: "Platform", ids: ["alerting", "keamanan-kepatuhan"] },
+];
 
-  // Scroll spy
+const SECTION_BY_ID = new Map(DOCS_SECTIONS.map((section) => [section.id, section]));
+const FIRST_SECTION_ID = DOCS_SECTIONS[0]?.id ?? "prolog";
+
+/* -------------------------------------------------------------------------- */
+/*  Page                                                                      */
+/* -------------------------------------------------------------------------- */
+
+function DocsPage() {
+  const [activeSection, setActiveSection] = useState(FIRST_SECTION_ID);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // The drawer only exists below the md breakpoint. On desktop the sidebar is
+  // sticky and always visible, so it must never be inert.
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsDesktop(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  // Scroll spy. Registered once, with a functional update so the listener is
+  // not torn down and rebuilt on every section change.
   useEffect(() => {
     const handleScroll = () => {
-      const sections = DOCS_SECTIONS.map((s) => document.getElementById(s.id));
-      let currentActive = activeSection;
+      const threshold = 160;
+      let current = FIRST_SECTION_ID;
 
-      for (const section of sections) {
-        if (section) {
-          const rect = section.getBoundingClientRect();
-          if (rect.top <= 150 && rect.bottom >= 150) {
-            currentActive = section.id;
-          }
+      for (const section of DOCS_SECTIONS) {
+        const element = document.getElementById(section.id);
+        if (element && element.getBoundingClientRect().top <= threshold) {
+          current = section.id;
         }
       }
 
-      if (currentActive !== activeSection) {
-        setActiveSection(currentActive);
-      }
+      setActiveSection((previous) => (previous === current ? previous : current));
     };
 
+    handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [activeSection]);
+  }, []);
 
   const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 100;
-      window.scrollTo({ top: y, behavior: "smooth" });
-    }
+    const element = document.getElementById(id);
+    if (!element) return;
+
+    const top = element.getBoundingClientRect().top + window.scrollY - 96;
+    window.scrollTo({ top, behavior: "smooth" });
+    window.history.replaceState(null, "", `#${id}`);
     setIsSidebarOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 items-center gap-4 px-4 sm:px-8 max-w-[1400px]">
-          <button
-            className="md:hidden text-muted-foreground hover:text-foreground"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-wide items-center gap-4 px-4 sm:px-6">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="h-11 w-11 md:hidden"
+            aria-label={isSidebarOpen ? "Tutup daftar isi" : "Buka daftar isi"}
+            aria-expanded={isSidebarOpen}
+            onClick={() => setIsSidebarOpen((open) => !open)}
           >
-            {isSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+            {isSidebarOpen ? <X /> : <Menu />}
+          </Button>
 
-          <Link
-            to="/dashboard"
-            className="hidden md:inline-flex items-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" /> Dashboard
-          </Link>
-          <div className="hidden md:block h-4 w-px bg-border" />
+          <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+            <Link to="/dashboard">
+              <ArrowLeft />
+              Dashboard
+            </Link>
+          </Button>
+
+          <div className="hidden h-4 w-px bg-border md:block" />
+
           <Link to="/" className="flex items-center gap-2 font-display text-sm font-semibold">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
             <span>
-              WebWatch <span className="text-muted-foreground font-normal ml-1">Documentation</span>
+              WebWatch <span className="ml-1 font-normal text-muted-foreground">Dokumentasi</span>
             </span>
           </Link>
 
-          <div className="ml-auto hidden md:flex items-center gap-4 text-sm font-medium text-muted-foreground">
+          <nav className="ml-auto hidden items-center gap-5 text-sm font-medium text-muted-foreground md:flex">
             <a
               href="https://github.com/hsanmz/webwatch"
-              className="hover:text-foreground transition-colors"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="transition-colors hover:text-foreground"
             >
               GitHub
             </a>
-            <a href="/status" className="hover:text-foreground transition-colors">
-              API Status
-            </a>
-          </div>
+            <Link to="/status" className="transition-colors hover:text-foreground">
+              Status API
+            </Link>
+          </nav>
         </div>
       </header>
 
-      <div className="flex-1 mx-auto w-full max-w-[1400px] flex relative">
-        {/* Sidebar Navigation */}
+      <div className="relative mx-auto flex w-full max-w-wide flex-1">
         <aside
-          className={`
-          fixed md:sticky top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-72 border-r border-border bg-background/95 backdrop-blur-md transition-transform duration-300 md:translate-x-0 overflow-hidden
-          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+          className={cn(
+            "fixed top-14 left-0 z-30 h-[calc(100vh-3.5rem)] w-72 overflow-y-auto border-r border-border bg-surface transition-transform duration-[var(--motion-slow)] md:sticky md:translate-x-0",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+          inert={!isDesktop && !isSidebarOpen}
         >
-          <div className="p-6 h-full overflow-y-auto pb-24 scrollbar-hide">
-            <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 ml-2">
-              Getting Started
-            </h4>
-            <nav className="space-y-1 mb-8">
-              {DOCS_SECTIONS.slice(0, 2).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => scrollToSection(item.id)}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-left
-                    ${
-                      activeSection === item.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-card hover:text-foreground"
-                    }
-                  `}
-                >
-                  <item.icon
-                    className={`h-4 w-4 shrink-0 ${activeSection === item.id ? "text-primary" : "text-muted-foreground/50"}`}
-                  />
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))}
-            </nav>
+          <nav className="p-6 pb-24">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} className="mb-8 last:mb-0">
+                <h2 className="mb-3 ml-2 text-xs font-medium text-muted-foreground">
+                  {group.label}
+                </h2>
+                <ul className="space-y-1">
+                  {group.ids.map((id) => {
+                    const section = SECTION_BY_ID.get(id);
+                    if (!section) return null;
+                    const isActive = activeSection === id;
 
-            <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 ml-2">
-              API &amp; Integrasi
-            </h4>
-            <nav className="space-y-1 mb-8">
-              {DOCS_SECTIONS.slice(2, 5).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => scrollToSection(item.id)}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-left
-                    ${
-                      activeSection === item.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-card hover:text-foreground"
-                    }
-                  `}
-                >
-                  <item.icon
-                    className={`h-4 w-4 shrink-0 ${activeSection === item.id ? "text-primary" : "text-muted-foreground/50"}`}
-                  />
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))}
-            </nav>
+                    return (
+                      <li key={id}>
+                        <a
+                          href={`#${id}`}
+                          aria-current={isActive ? "true" : undefined}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            scrollToSection(id);
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-fast)]",
+                            isActive
+                              ? "bg-primary-subtle text-primary"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          <section.icon
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              isActive ? "text-primary" : "text-muted-foreground",
+                            )}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{section.title}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
 
-            <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 ml-2">
-              Platform &amp; Ops
-            </h4>
-            <nav className="space-y-1">
-              {DOCS_SECTIONS.slice(5).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => scrollToSection(item.id)}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-left
-                    ${
-                      activeSection === item.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:text-card hover:text-foreground"
-                    }
-                  `}
-                >
-                  <item.icon
-                    className={`h-4 w-4 shrink-0 ${activeSection === item.id ? "text-primary" : "text-muted-foreground/50"}`}
-                  />
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))}
-            </nav>
-
-            <div className="mt-12 pt-6 border-t border-border/50">
+            <div className="border-t border-border pt-6">
               <a
                 href="https://github.com/hsanmz/webwatch/issues"
-                className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-info-surface text-info">
+                  <svg
+                    className="h-3 w-3"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
                   </svg>
                 </span>
-                Support &amp; Komunitas
+                Support dan komunitas
               </a>
             </div>
-          </div>
+          </nav>
         </aside>
 
-        {/* Overlay for mobile sidebar */}
-        {isSidebarOpen && (
-          <div
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-20 md:hidden"
+        {isSidebarOpen ? (
+          <button
+            type="button"
+            aria-label="Tutup daftar isi"
+            className="fixed inset-0 z-20 cursor-default bg-background/80 backdrop-blur-sm md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
-        )}
+        ) : null}
 
-        {/* Main Content Area */}
-        <main className="flex-1 w-full min-w-0" ref={contentRef}>
-          <div className="px-6 py-12 md:px-12 lg:px-24 max-w-5xl mx-auto">
-            <div className="mb-20">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-mono font-bold mb-6">
-                <span className="h-2 w-2 rounded-full bg-primary animate-pulse"></span>
-                v1.0.0 (Stable)
-              </div>
-              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6">
-                WebWatch Documentation
+        <main className="min-w-0 flex-1">
+          <div className="mx-auto max-w-content px-6 py-12 md:px-10">
+            <div className="mb-16">
+              <h1 className="mb-5 font-display text-4xl font-extrabold tracking-tight md:text-5xl">
+                Dokumentasi WebWatch
               </h1>
-              <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed font-medium max-w-3xl">
-                Panduan komprehensif, referensi API, dan praktik terbaik (*best practices*) untuk
-                membangun sistem pengawasan aplikasi tanpa celah.
+              <p className="max-w-reading text-lg font-medium leading-relaxed text-muted-foreground md:text-xl">
+                Panduan setup, referensi API, dan perilaku alerting untuk membangun sistem
+                pengawasan aplikasi.
               </p>
             </div>
 
-            <div className="space-y-32 pb-32">
-              {DOCS_SECTIONS.map((section, index) => (
-                <motion.section
-                  key={section.id}
-                  id={section.id}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.6 }}
-                  className="scroll-mt-28"
-                >
-                  <div className="flex items-center gap-4 mb-8 pb-4 border-b border-border">
-                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary flex items-center justify-center border border-primary/20 shadow-sm">
-                      <section.icon className="h-6 w-6" />
+            <div className="space-y-24 pb-16">
+              {DOCS_SECTIONS.map((section) => (
+                <section key={section.id} id={section.id} className="scroll-mt-24">
+                  <div className="mb-8 flex items-center gap-4 border-b border-border pb-5">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary-subtle text-primary">
+                      <section.icon className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
                       {section.title}
                     </h2>
                   </div>
-                  <div className="prose prose-invert prose-p:text-muted-foreground prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none max-w-none text-base md:text-lg">
-                    {section.content}
-                  </div>
-                </motion.section>
+                  {section.content}
+                </section>
               ))}
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-border mt-12 pb-16 gap-4 text-center md:text-left">
-              <p className="text-sm text-muted-foreground font-medium">
-                © 2026 WebWatch APM. Built for developers.
-              </p>
-              <button
+            <div className="flex flex-col items-center justify-between gap-4 border-t border-border py-8 text-center md:flex-row md:text-left">
+              <p className="text-sm text-muted-foreground">© 2026 WebWatch APM</p>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className="text-sm font-medium text-foreground bg-card hover:bg-muted border border-border px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                Scroll ke Paling Atas
-              </button>
+                Kembali ke atas
+              </Button>
             </div>
           </div>
         </main>

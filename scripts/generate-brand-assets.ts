@@ -8,7 +8,7 @@
  *
  * Outputs:
  *   public/logo.png              mark, trimmed to its content box (transparent)
- *   public/favicon.png           badge, 512x512 (transparent)
+ *   public/favicon.png           badge, 256x256 (transparent)
  *   public/favicon.ico           badge, 16/24/32/48/64/128/256 (PNG payloads)
  *   public/apple-touch-icon.png  badge on brand green, 180x180 (opaque)
  *   public/maskable-icon.png     badge on brand green, 512x512 (safe zone)
@@ -114,10 +114,7 @@ async function main() {
   await write("logo.png", await sharp(mark.data).png(PNG_OPTS).toBuffer());
 
   console.log("Building favicon.png...");
-  await write(
-    "favicon.png",
-    await onCanvas(badge.data, 512, 470, { r: 0, g: 0, b: 0, alpha: 0 }),
-  );
+  await write("favicon.png", await onCanvas(badge.data, 256, 235, { r: 0, g: 0, b: 0, alpha: 0 }));
 
   console.log("Building favicon.ico...");
   const icoSizes = [16, 24, 32, 48, 64, 128, 256];

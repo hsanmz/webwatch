@@ -5,6 +5,7 @@ import { ChevronsUpDown, LogOut, MessageCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,48 +33,45 @@ export function ProfileDropdown() {
     }
   }
 
-  const telegram = user?.chat_id ? "Terhubung" : "Belum terhubung";
+  const connected = user?.chat_id != null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="h-9 gap-2 rounded-full px-1.5 hover:bg-accent"
-          title="Akun"
-        >
+        <Button variant="ghost" className="h-10 gap-2 px-2" title="Akun">
           <Avatar className="h-7 w-7">
-            <AvatarFallback className="bg-primary/10 font-display text-xs font-bold text-primary">
+            <AvatarFallback className="bg-primary-subtle font-display text-xs font-bold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
           <span className="hidden max-w-[180px] truncate text-sm font-medium sm:block">
             {email}
           </span>
-          <ChevronsUpDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
+          <ChevronsUpDown
+            className="hidden h-3.5 w-3.5 text-muted-foreground sm:block"
+            aria-hidden="true"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            Akun
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Akun</p>
           <p className="mt-0.5 truncate text-sm font-medium">{email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
-          <MessageCircle className="h-4 w-4 text-primary" />
+          <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
           <span className="text-muted-foreground">Telegram</span>
-          <span className="ml-auto rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest">
-            {telegram}
-          </span>
+          <Badge variant={connected ? "success" : "neutral"} className="ml-auto">
+            {connected ? "Terhubung" : "Belum terhubung"}
+          </Badge>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={signOut}
-          className="gap-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+          className="gap-2 text-destructive focus:bg-danger-surface focus:text-destructive"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4" aria-hidden="true" />
           Keluar
         </DropdownMenuItem>
       </DropdownMenuContent>

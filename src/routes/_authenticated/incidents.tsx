@@ -4,6 +4,10 @@ import { History } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/app/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
 
 export const Route = createFileRoute("/_authenticated/incidents")({
   component: Incidents,
@@ -41,69 +45,88 @@ function useDashboardStats() {
   });
 }
 
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 function Incidents() {
-  const { data: statsData, isPending: statsPending } = useDashboardStats();
+  const { data: statsData, isPending, isError, refetch } = useDashboardStats();
+  const incidents = statsData?.incidents ?? [];
 
   return (
     <>
       <PageHeader
         eyebrow="Incidents"
-        title="Riwayat Gangguan"
-        description="Daftar insiden downtime dari seluruh situs Anda."
+        title="Riwayat gangguan"
+        description="Daftar insiden downtime dari seluruh situs yang kamu pantau."
       />
 
       <section className="panel p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <History className="h-5 w-5 text-destructive" />
-          <h2 className="font-display text-base font-semibold">Semua Insiden</h2>
+        <div className="mb-4 flex items-center gap-2">
+          <History className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <h2 className="font-display text-base font-semibold text-foreground">Semua insiden</h2>
         </div>
-        <div className="mt-4">
-          <ul className="space-y-4">
-            {statsPending && <li className="text-sm text-muted-foreground">Memuat...</li>}
-            {statsData?.incidents.length === 0 && (
-              <li className="text-sm text-muted-foreground">
-                Tidak ada riwayat gangguan tercatat.
+
+        {isPending ? (
+          <ul className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <li key={i}>
+                <Skeleton className="h-24 rounded-lg" />
               </li>
-            )}
-            {statsData?.incidents.map((inc) => (
-              <li
-                key={inc.id}
-                className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4"
-              >
+            ))}
+          </ul>
+        ) : isError ? (
+          <ErrorState
+            className="min-h-[180px]"
+            title="Riwayat insiden gagal dimuat"
+            description="Data insiden tidak bisa diambil dari server."
+            onRetry={() => void refetch()}
+          />
+        ) : incidents.length === 0 ? (
+          <EmptyState
+            className="min-h-[180px]"
+            icon={History}
+            title="Tidak ada riwayat gangguan"
+            description="Belum ada downtime yang tercatat untuk situs yang kamu pantau."
+          />
+        ) : (
+          <ul className="space-y-3">
+            {incidents.map((inc) => (
+              <li key={inc.id} className="rounded-lg border border-border bg-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link
                       to={`/sites/${inc.site_id}`}
-                      className="text-sm font-semibold hover:underline"
+                      className="text-sm font-semibold text-foreground hover:underline"
                     >
                       {inc.site_name}
                     </Link>
-                    {inc.resolved_at ? (
-                      <span className="bg-[var(--up)]/10 text-[var(--up)] border border-[var(--up)]/20 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-widest">
-                        Resolved
-                      </span>
-                    ) : (
-                      <span className="bg-[var(--down)]/10 text-[var(--down)] border border-[var(--down)]/20 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-widest animate-pulse">
-                        Ongoing
-                      </span>
-                    )}
+                    <Badge variant={inc.resolved_at ? "success" : "danger"}>
+                      {inc.resolved_at ? "Selesai" : "Berlangsung"}
+                    </Badge>
                   </div>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    Mulai: {new Date(inc.started_at).toLocaleString()}
-                  </span>
+                  <time
+                    className="text-xs text-muted-foreground tabular-nums"
+                    dateTime={inc.started_at}
+                  >
+                    Mulai {formatDateTime(inc.started_at)}
+                  </time>
                 </div>
-                <p className="text-base mt-2">
+                <p className="mt-2 text-sm leading-relaxed text-foreground">
                   {inc.error_message || "Koneksi gagal atau timeout"}
                 </p>
                 {inc.resolved_at && (
-                  <p className="text-sm font-mono text-muted-foreground mt-1">
-                    Pulih pada: {new Date(inc.resolved_at).toLocaleString()}
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                    Pulih pada {formatDateTime(inc.resolved_at)}
                   </p>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+        )}
       </section>
     </>
   );

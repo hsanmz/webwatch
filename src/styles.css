@@ -5,20 +5,182 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * WebWatch design system — "ops console".
- * Deep midnight surfaces, signal-green accent, amber/red status colors,
- * mono display type. All values are oklch semantic tokens.
+ * Webwatch design system: single source of truth.
+ *
+ * Everything visual resolves through this file. Components never hard-code a
+ * colour, radius, shadow, or duration: they consume the semantic tokens below.
+ *
+ * Palette values are the Webwatch baseline converted to OKLCH so that the
+ * lightness/chroma relationships survive a future dark theme. Raw palette
+ * entries keep the `--brand-*`, `--neutral-*` and `--status-*` names; the
+ * `--color-*` entries are the semantic roles components are allowed to use.
+ *
+ * Contrast notes (measured against the rendered colours, WCAG 2.2 AA):
+ *   text on canvas / surface ......... 17.1:1 / 17.9:1
+ *   muted text on canvas / surface .... 5.1:1  / 5.3:1
+ *   muted text on a muted surface ..... 4.9:1
+ *   white on --primary (brand-800) ... 6.5:1
+ *   success / warning / danger text .. 4.6:1 / 4.8:1 / 5.3:1 on their surfaces
+ *   focus ring (teal-700) ............ 4.8:1 on surface (needs 3:1)
+ *
+ * Documented deviations from the published baseline:
+ *   - `--primary` uses brand-800, not brand-700. White on brand-700 measures
+ *     4.50:1, exactly on the AA line, so the solid action colour steps one
+ *     level darker for headroom. brand-700 stays available for large text,
+ *     borders, and graphics.
+ *   - `--color-text-muted` is neutral-500 darkened one step (5C6C85) so muted
+ *     text also passes AA on neutral-100 surfaces, not just on white.
+ *   - `--color-warning` is warning-700 darkened one step (96600A) for the same
+ *     reason: warning-700 on warning-100 measures 4.42:1.
+ *   - `--paused` is a neutral, not amber. Paused means "not being monitored",
+ *     which is not a fault; amber is reserved for degraded and expiring SSL.
  */
 
+:root {
+  color-scheme: light;
+
+  /* ---- Brand palette ------------------------------------------------- */
+  --brand-950: oklch(0.2773 0.0447 192.5);
+  --brand-900: oklch(0.3814 0.0662 181.5);
+  --brand-800: oklch(0.4721 0.0873 174.4);
+  --brand-700: oklch(0.554 0.1117 167.2);
+  --brand-600: oklch(0.6487 0.1357 164.5);
+  --brand-500: oklch(0.7395 0.1609 161.6);
+  --brand-100: oklch(0.9596 0.0186 171.5);
+
+  /* ---- Secondary teal ------------------------------------------------ */
+  --teal-700: oklch(0.543 0.0917 207.6);
+  --teal-600: oklch(0.6002 0.1038 184.7);
+  --teal-100: oklch(0.9384 0.0352 200.2);
+
+  /* ---- Neutrals ------------------------------------------------------ */
+  --neutral-0: oklch(1 0 0);
+  --neutral-50: oklch(0.9842 0.0034 247.9);
+  --neutral-100: oklch(0.9683 0.0069 247.9);
+  --neutral-200: oklch(0.9288 0.0126 255.5);
+  --neutral-300: oklch(0.869 0.0198 252.9);
+  --neutral-400: oklch(0.704 0.0402 257.4);
+  --neutral-500: oklch(0.5544 0.0407 257.4);
+  --neutral-600: oklch(0.4462 0.0433 257.4);
+  --neutral-700: oklch(0.3717 0.0392 257.3);
+  --neutral-900: oklch(0.2077 0.0398 265.8);
+
+  /* ---- Status palette ------------------------------------------------ */
+  --success-700: oklch(0.5273 0.1371 150.1);
+  --success-100: oklch(0.9624 0.0434 156.7);
+  --warning-700: oklch(0.5538 0.1207 66.4);
+  --warning-100: oklch(0.9619 0.058 95.6);
+  --danger-700: oklch(0.5054 0.1905 27.5);
+  --danger-100: oklch(0.9356 0.0309 17.7);
+  --info-700: oklch(0.4882 0.2172 264.4);
+  --info-100: oklch(0.9319 0.0316 255.6);
+
+  /* ---- Semantic roles ------------------------------------------------ */
+  --color-bg: var(--neutral-50);
+  --color-surface: var(--neutral-0);
+  --color-surface-muted: var(--neutral-100);
+  --color-text: var(--neutral-900);
+  --color-text-muted: oklch(0.5276 0.0441 259.2);
+  --color-text-subtle: var(--neutral-600);
+  --color-border: var(--neutral-200);
+  --color-border-strong: var(--neutral-300);
+  --color-primary: var(--brand-800);
+  --color-primary-hover: var(--brand-900);
+  --color-primary-subtle: var(--brand-100);
+  --color-focus: var(--teal-700);
+  --color-success: var(--success-700);
+  --color-success-surface: var(--success-100);
+  --color-warning: oklch(0.5356 0.1125 70.3);
+  --color-warning-surface: var(--warning-100);
+  --color-danger: var(--danger-700);
+  --color-danger-surface: var(--danger-100);
+  --color-info: var(--info-700);
+  --color-info-surface: var(--info-100);
+
+  /* ---- shadcn-compatible surface roles ------------------------------- */
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --surface: var(--color-surface-muted);
+  --surface-foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--neutral-0);
+  --secondary: var(--color-surface-muted);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-surface-muted);
+  --muted-foreground: var(--color-text-muted);
+  --accent: var(--color-surface-muted);
+  --accent-foreground: var(--color-text);
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--neutral-0);
+  --border: var(--color-border);
+  --input: var(--color-border-strong);
+  --ring: var(--color-focus);
+
+  /* ---- Monitoring status roles ---------------------------------------- */
+  --up: var(--success-700);
+  --down: var(--danger-700);
+  --degraded: var(--color-warning);
+  --paused: var(--color-text-muted);
+
+  /* ---- Code block roles ----------------------------------------------- */
+  --code-plain: var(--color-text);
+  --code-punctuation: var(--color-text-subtle);
+  --code-keyword: var(--color-primary);
+  --code-attribute: var(--color-warning);
+  --code-string: var(--success-700);
+
+  /* ---- Data visualisation roles --------------------------------------- */
+  --chart-1: var(--brand-700);
+  --chart-2: var(--teal-600);
+  --chart-3: var(--color-warning);
+  --chart-4: var(--danger-700);
+  --chart-5: var(--neutral-400);
+
+  /* ---- Layout containers ----------------------------------------------- */
+  --container-reading: 45rem;
+  --container-content: 75rem;
+  --container-wide: 90rem;
+
+  /* ---- Radius -------------------------------------------------------- */
+  --radius: 0.875rem;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 8px 24px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 18px 48px rgb(15 23 42 / 0.12);
+  --shadow-panel: var(--shadow-sm);
+
+  /* ---- Motion -------------------------------------------------------- */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Typography ---------------------------------------------------- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-display: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -38,16 +200,52 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-up: var(--up);
-  --color-down: var(--down);
-  --color-paused: var(--paused);
   --color-surface: var(--surface);
   --color-surface-foreground: var(--surface-foreground);
-  --color-chart-1: var(--up);
-  --color-chart-2: var(--primary);
-  --color-chart-3: var(--paused);
-  --color-chart-4: var(--down);
-  --color-chart-5: var(--muted-foreground);
+  --color-brand: var(--brand-700);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+  --color-brand-strong: var(--brand-800);
+  --color-brand-subtle: var(--brand-100);
+  --color-teal: var(--teal-600);
+  --color-teal-700: var(--teal-700);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-900: var(--neutral-900);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-subtle: var(--color-primary-subtle);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-degraded: var(--degraded);
+  --color-paused: var(--paused);
+  --color-success: var(--color-success);
+  --color-success-surface: var(--color-success-surface);
+  --color-warning: var(--color-warning);
+  --color-warning-surface: var(--color-warning-surface);
+  --color-danger: var(--color-danger);
+  --color-danger-surface: var(--color-danger-surface);
+  --color-info: var(--color-info);
+  --color-info-surface: var(--color-info-surface);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-code-plain: var(--code-plain);
+  --color-code-punctuation: var(--code-punctuation);
+  --color-code-keyword: var(--code-keyword);
+  --color-code-attribute: var(--code-attribute);
+  --color-code-string: var(--code-string);
   --color-sidebar: var(--card);
   --color-sidebar-foreground: var(--foreground);
   --color-sidebar-primary: var(--primary);
@@ -56,104 +254,13 @@
   --color-sidebar-accent-foreground: var(--accent-foreground);
   --color-sidebar-border: var(--border);
   --color-sidebar-ring: var(--ring);
-  --shadow-glow: 0 0 0 1px var(--border), 0 18px 50px -20px oklch(0.72 0.17 155 / 0.35);
-  --shadow-panel: 0 24px 60px -32px oklch(0 0 0 / 0.9);
-}
-
-:root {
-  --radius: 0.5rem;
-  --background: oklch(0.982 0.006 250);
-  --foreground: oklch(0.185 0.02 250);
-  --surface: oklch(0.955 0.008 250);
-  --surface-foreground: oklch(0.185 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.185 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.185 0.02 250);
-  --primary: oklch(0.58 0.12 178);
-  --primary-foreground: oklch(0.98 0.01 178);
-  --secondary: oklch(0.945 0.012 178);
-  --secondary-foreground: oklch(0.26 0.02 250);
-  --muted: oklch(0.952 0.008 250);
-  --muted-foreground: oklch(0.455 0.02 250);
-  --accent: oklch(0.945 0.02 178);
-  --accent-foreground: oklch(0.26 0.02 250);
-  --destructive: oklch(0.62 0.21 22);
-  --destructive-foreground: oklch(0.98 0.01 22);
-  --up: oklch(0.56 0.13 178);
-  --down: oklch(0.62 0.21 22);
-  --paused: oklch(0.7 0.15 85);
-  --border: oklch(0.905 0.012 250);
-  --input: oklch(0.905 0.012 250);
-  --ring: oklch(0.58 0.12 178);
-}
-
-/*
- * Marketing pages (landing + auth): bright surfaces, black ink, toska accent —
- * mirrors the logo (hitam + hijau toska). Scope tokens to the subtree so the
- * dark "ops console" dashboard is untouched.
- */
-.marketing {
-  --background: oklch(0.982 0.006 250);
-  --color-background: var(--background);
-  --foreground: oklch(0.185 0.02 250);
-  --color-foreground: var(--foreground);
-  --surface: oklch(0.955 0.008 250);
-  --color-surface: var(--surface);
-  --surface-foreground: oklch(0.185 0.02 250);
-  --color-surface-foreground: var(--surface-foreground);
-  --card: oklch(1 0 0);
-  --color-card: var(--card);
-  --card-foreground: oklch(0.185 0.02 250);
-  --color-card-foreground: var(--card-foreground);
-  --popover: oklch(1 0 0);
-  --color-popover: var(--popover);
-  --popover-foreground: oklch(0.185 0.02 250);
-  --color-popover-foreground: var(--popover-foreground);
-  --primary: oklch(0.58 0.12 178);
-  --color-primary: var(--primary);
-  --primary-foreground: oklch(0.98 0.01 178);
-  --color-primary-foreground: var(--primary-foreground);
-  --secondary: oklch(0.945 0.012 178);
-  --color-secondary: var(--secondary);
-  --secondary-foreground: oklch(0.26 0.02 250);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --muted: oklch(0.952 0.008 250);
-  --color-muted: var(--muted);
-  --muted-foreground: oklch(0.455 0.02 250);
-  --color-muted-foreground: var(--muted-foreground);
-  --accent: oklch(0.945 0.02 178);
-  --color-accent: var(--accent);
-  --accent-foreground: oklch(0.26 0.02 250);
-  --color-accent-foreground: var(--accent-foreground);
-  --up: oklch(0.56 0.13 178);
-  --color-up: var(--up);
-  --down: oklch(0.62 0.21 22);
-  --color-down: var(--down);
-  --paused: oklch(0.7 0.15 85);
-  --color-paused: var(--paused);
-  --border: oklch(0.905 0.012 250);
-  --color-border: var(--border);
-  --input: oklch(0.905 0.012 250);
-  --color-input: var(--input);
-  --ring: oklch(0.58 0.12 178);
-  --color-ring: var(--ring);
-  --shadow-panel: 0 24px 60px -36px oklch(0.16 0.02 250 / 0.28);
-  --shadow-glow: 0 0 0 1px var(--border), 0 18px 50px -20px oklch(0.56 0.12 178 / 0.4);
-
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-.marketing .text-gradient {
-  background-image: linear-gradient(
-    100deg,
-    oklch(0.185 0.02 250) 15%,
-    oklch(0.5 0.12 178) 55%,
-    oklch(0.55 0.13 178) 90%
-  );
-  background-clip: text;
-  color: transparent;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-panel: var(--shadow-panel);
+  --container-reading: var(--container-reading);
+  --container-content: var(--container-content);
+  --container-wide: var(--container-wide);
 }
 
 @layer base {
@@ -161,151 +268,92 @@
     border-color: var(--color-border);
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
     font-family: var(--font-sans);
-    background-image:
-      radial-gradient(60rem 40rem at 15% -10%, oklch(0.76 0.13 178 / 0.09), transparent 60%),
-      radial-gradient(50rem 35rem at 95% 0%, oklch(0.6 0.13 230 / 0.1), transparent 60%);
-    background-attachment: fixed;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   h1,
   h2,
-  h3 {
+  h3,
+  h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--brand-700) 22%, transparent);
+  }
+
+  /* Numbers, durations and timestamps stay column-aligned. */
+  .tabular,
+  time,
+  code,
+  kbd,
+  samp {
+    font-variant-numeric: tabular-nums;
   }
 }
 
+/*
+ * `panel` is the shared card surface: solid background, hairline border, the
+ * system card radius and the lowest elevation step. Dense screens rely on the
+ * border, not a shadow, to separate regions.
+ */
 @utility panel {
-  background-color: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-panel);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
-@utility grid-lines {
-  background-image:
-    linear-gradient(to right, oklch(1 0 0 / 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(1 0 0 / 0.035) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
-
-@utility glass {
-  background-color: color-mix(in oklab, var(--card) 70%, transparent);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-}
-
-@utility text-gradient {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-foreground) 20%,
-    var(--color-primary) 60%,
-    oklch(0.82 0.12 200) 95%
-  );
-  background-clip: text;
-  color: transparent;
-}
-
-@utility glow-ring {
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--color-primary) 30%, transparent),
-    0 30px 90px -40px color-mix(in oklab, var(--color-primary) 65%, transparent);
-}
-
-@utility ticker-track {
-  display: flex;
-  width: max-content;
-  animation: ticker 38s linear infinite;
-}
-
-@keyframes ticker {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
+/*
+ * A single live indicator: the global system-status pill. The pulse is
+ * supplementary. The label always states the status in words, so nothing
+ * depends on the animation.
+ */
+@utility live-dot {
+  animation: pulse-ring 2.4s var(--motion-ease) infinite;
 }
 
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--up) 55%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 55%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 9px transparent;
+    box-shadow: 0 0 0 8px transparent;
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
   }
 }
 
-@utility live-dot {
-  animation: pulse-ring 2.4s ease-out infinite;
-}
-
-@keyframes float-soft {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-@utility floaty {
-  animation: float-soft 7s ease-in-out infinite;
-}
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@utility rise {
-  animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@utility marquee-mask {
-  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
-}
-
-@utility reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.reveal.visible {
-  opacity: 1;
-  transform: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track,
-  .live-dot,
-  .floaty,
-  .rise {
+  .live-dot {
     animation: none !important;
   }
 }

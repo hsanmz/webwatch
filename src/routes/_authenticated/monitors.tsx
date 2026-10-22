@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/app/page-header";
 import { SiteCard } from "@/components/app/site-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
 
 export const Route = createFileRoute("/_authenticated/monitors")({
   component: Monitors,
@@ -63,7 +66,7 @@ function Monitors() {
   const [urlError, setUrlError] = useState<string | null>(null);
 
   const urlCheck = useMemo(() => validateUrl(url), [url]);
-  const { data: sitesData, isPending } = useSites();
+  const { data: sitesData, isPending, isError, refetch } = useSites();
 
   const addSite = useMutation({
     mutationFn: () => {
@@ -150,12 +153,12 @@ function Monitors() {
           <Dialog open={openAdd} onOpenChange={setOpenAdd}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" /> Tambah Situs
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Tambah situs
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[550px]">
               <DialogHeader>
-                <DialogTitle>Tambah Situs Baru</DialogTitle>
+                <DialogTitle>Tambah situs baru</DialogTitle>
                 <DialogDescription>
                   Masukkan URL dan atur konfigurasi pemantauan. Kami akan mengeceknya secara
                   berkala.
@@ -170,7 +173,7 @@ function Monitors() {
                 }}
               >
                 <div className="space-y-2">
-                  <Label htmlFor="url">URL Lengkap</Label>
+                  <Label htmlFor="url">URL lengkap</Label>
                   <Input
                     id="url"
                     required
@@ -181,19 +184,27 @@ function Monitors() {
                     }}
                     placeholder="https://situsku.com"
                     aria-invalid={!!urlError}
+                    aria-describedby="url-hint"
                   />
                   {urlError ? (
-                    <p className="text-xs font-medium text-[var(--down)]">{urlError}</p>
+                    <p id="url-hint" className="text-xs font-medium text-danger">
+                      {urlError}
+                    </p>
                   ) : (
-                    url.trim() !== "" &&
-                    urlCheck.ok && (
-                      <p className="text-xs text-muted-foreground">
-                        Akan dipantau sebagai{" "}
-                        <code className="rounded bg-muted px-1 py-0.5">
-                          {/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`}
-                        </code>
-                      </p>
-                    )
+                    <p id="url-hint" className="text-xs text-muted-foreground">
+                      {url.trim() !== "" && urlCheck.ok ? (
+                        <>
+                          Akan dipantau sebagai{" "}
+                          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                            {/^https?:\/\//i.test(url.trim())
+                              ? url.trim()
+                              : `https://${url.trim()}`}
+                          </code>
+                        </>
+                      ) : (
+                        "Contoh: situsku.com"
+                      )}
+                    </p>
                   )}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -208,7 +219,7 @@ function Monitors() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="threshold">Toleransi Gagal (x)</Label>
+                    <Label htmlFor="threshold">Toleransi gagal (x)</Label>
                     <Input
                       id="threshold"
                       type="number"
@@ -219,7 +230,7 @@ function Monitors() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="keyword">Pengecekan Keyword (opsional)</Label>
+                  <Label htmlFor="keyword">Pengecekan keyword (opsional)</Label>
                   <Input
                     id="keyword"
                     value={keyword}
@@ -227,11 +238,11 @@ function Monitors() {
                     placeholder="Contoh: Login"
                   />
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-card/50 p-4">
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-surface p-4">
                   <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
                   <div className="grid gap-1.5">
                     <Label htmlFor="ssl" className="cursor-pointer font-semibold">
-                      Pantau Sertifikat SSL
+                      Pantau sertifikat SSL
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Kirim peringatan jika SSL akan kedaluwarsa (&lt; 7 hari).
@@ -243,8 +254,10 @@ function Monitors() {
                     type="submit"
                     disabled={addSite.isPending || (url.trim() !== "" && !urlCheck.ok)}
                   >
-                    {addSite.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Simpan & Pantau
+                    {addSite.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    )}
+                    Simpan & pantau
                   </Button>
                 </div>
               </form>
@@ -254,47 +267,30 @@ function Monitors() {
       />
 
       {isPending ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="panel animate-pulse p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="h-5 w-3/4 rounded bg-muted" />
-                  <div className="mt-2 h-3 w-1/2 rounded bg-muted" />
-                </div>
-                <div className="h-5 w-20 rounded-full bg-muted" />
-              </div>
-              <div className="mt-6 flex gap-5">
-                <div className="h-3 w-16 rounded bg-muted" />
-                <div className="h-3 w-24 rounded bg-muted" />
-              </div>
-              <div className="mt-6 border-t border-border/60 pt-4">
-                <div className="h-8 w-24 rounded bg-muted" />
-              </div>
-            </div>
+            <Skeleton key={i} className="h-[196px] rounded-lg" />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState
+          title="Situs tidak bisa dimuat"
+          description="Daftar situs gagal diambil dari server."
+          onRetry={() => void refetch()}
+        />
       ) : (sitesData ?? []).length === 0 ? (
-        <div className="panel flex min-h-[320px] flex-col items-center justify-center px-4 text-center">
-          <div className="relative mb-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-              <Server className="h-7 w-7 text-primary" />
-            </div>
-            <span className="live-dot absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-background bg-[var(--up)]" />
-          </div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Mulai Pantau
-          </p>
-          <h3 className="mt-1.5 font-display text-lg font-semibold">Belum ada situs dipantau</h3>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Tambahkan website pertama kamu untuk mulai memantau uptime.
-          </p>
-          <Button className="mt-6" onClick={() => setOpenAdd(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Tambah Situs Pertama
-          </Button>
-        </div>
+        <EmptyState
+          icon={Server}
+          title="Belum ada situs dipantau"
+          description="Tambahkan website pertama kamu untuk mulai memantau uptime."
+          action={
+            <Button onClick={() => setOpenAdd(true)}>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Tambah situs pertama
+            </Button>
+          }
+        />
       ) : (
-        <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sitesData?.map((site) => (
             <SiteCard
               key={site.id}

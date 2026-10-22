@@ -103,10 +103,24 @@ logic belongs in `src/lib/*.server.ts` so it stays testable and reusable.
 
 ### 4.7 Use the design tokens
 
-Never hard-code colors or radii. Use the semantic tokens from `src/styles.css`
-(`--primary`, `--up`, `--down`, `--paused`, `--surface`, `--card`, `--border`, `--muted-foreground`,
-`--shadow-glow`, `--shadow-panel`, `--radius`, `--font-display`, `--font-mono`). The palette is
-OKLCH; add new colors as tokens rather than inline hex values.
+Never hard-code colors or radii. `src/styles.css` is the single source of truth; the full
+reference is [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
+
+- **Semantic roles** (what components are allowed to use): `--color-bg`, `--color-surface`,
+  `--color-surface-muted`, `--color-text`, `--color-text-muted`, `--color-text-subtle`,
+  `--color-border`, `--color-border-strong`, `--color-primary`, `--color-primary-hover`,
+  `--color-primary-subtle`, `--color-focus`, `--color-success`, `--color-success-surface`,
+  `--color-warning`, `--color-warning-surface`, `--color-danger`, `--color-danger-surface`,
+  `--color-info`, `--color-info-surface`.
+- **Monitoring status**: `--up`, `--down`, `--degraded`, `--paused`. `--paused` is neutral on
+  purpose: a paused monitor is not a fault.
+- **Charts**: `--chart-1` through `--chart-5`. **Code**: `--code-plain`, `--code-punctuation`,
+  `--code-keyword`, `--code-attribute`, `--code-string`.
+- **Shape and type**: `--radius-xs/sm/md/lg/xl`, `--shadow-sm/md/lg`, `--font-sans`,
+  `--font-display`, `--font-mono`, `--container-reading/content/wide`.
+
+The palette is OKLCH. Add new colors as semantic tokens rather than inline hex values, and
+write down the reason in `DESIGN_SYSTEM.md`.
 
 ---
 
@@ -124,6 +138,7 @@ OKLCH; add new colors as tokens rather than inline hex values.
 | Routes | File-based. See `src/routes/README.md`. Never create `src/pages/`, `app/layout.tsx`, or `_app/` — those are Next.js/Remix conventions. |
 | Generated files | `src/routeTree.gen.ts` is generated. Never hand-edit it. |
 | UI primitives | `src/components/ui/*` are shadcn/ui generated. Change them only deliberately. |
+| Design system | `DESIGN_SYSTEM.md` documents the tokens, components, states, and the documented deviations. Update it whenever a token is added or a rule changes. |
 
 ### Adding an API route
 

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Activity, Globe, History, LayoutDashboard, Radar, Settings } from "lucide-react";
+import { Activity, Globe, History, LayoutDashboard, Settings } from "lucide-react";
 
 import {
   Sidebar,
@@ -13,10 +13,11 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { BrandMark } from "@/components/app/brand";
 
 const NAV_MAIN = [
   {
-    title: "Overview",
+    title: "Ringkasan",
     items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
   },
   {
@@ -41,19 +42,10 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg">
-              <Link to="/dashboard">
-                <div className="flex aspect-square h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Radar className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="font-display text-sm font-bold">
-                    Web<span className="text-primary">Watch</span>
-                  </span>
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Ops Console
-                  </span>
-                </div>
+            <SidebarMenuButton asChild size="lg" tooltip="WebWatch">
+              <Link to="/dashboard" className="gap-2.5">
+                <BrandMark className="h-6 w-6 shrink-0" />
+                <span className="font-display text-sm font-bold tracking-tight">WebWatch</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -75,7 +67,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
                         <Link to={item.href as "/dashboard"}>
-                          <item.icon />
+                          <item.icon aria-hidden="true" />
                           <span>{item.label}</span>
                         </Link>
                       </SidebarMenuButton>

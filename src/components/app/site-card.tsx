@@ -1,14 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowUpRight,
-  Clock,
-  Loader2,
-  Pause,
-  Play,
-  Trash2,
-} from "lucide-react";
+import { Activity, AlertTriangle, Clock, Loader2, Pause, Play, Trash2 } from "lucide-react";
 import type { ApiSite } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
@@ -68,57 +59,55 @@ export function SiteCard({
   const needsVerification = site.verification_status === "pending";
 
   return (
-    <article className="panel group flex flex-col justify-between p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-glow">
+    <article className="panel flex flex-col justify-between p-5 transition-colors hover:border-border-strong">
       <div>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
-              className={`flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-lg border font-display text-sm font-bold uppercase ${
+              className={`flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-lg border font-display text-sm font-bold ${
                 needsVerification
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
-                  : "border-border bg-muted text-muted-foreground group-hover:text-primary"
+                  ? "border-warning/30 bg-warning-surface text-warning"
+                  : "border-border bg-muted text-muted-foreground"
               }`}
+              aria-hidden="true"
             >
               {needsVerification ? <AlertTriangle className="h-4 w-4" /> : hostInitial(site.url)}
             </div>
             <div className="min-w-0">
-              <p className="truncate font-display text-base font-semibold">
+              <p className="truncate font-display text-base font-semibold text-foreground">
                 {site.name || hostLabel(site.url)}
               </p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                {site.url}
-              </p>
+              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{site.url}</p>
             </div>
           </div>
           <StatusBadge status={site.current_status} active={site.is_active} />
         </div>
 
-        <div className="mt-5 flex items-center gap-4 rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5 text-primary" /> tiap {site.interval_seconds / 60}m
+            <Activity className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            tiap {Math.round(site.interval_seconds / 60)} menit
           </span>
-          <span className="h-3 w-px bg-border" />
+          <span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
           <span className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-primary" />
+            <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             {site.last_checked_at
-              ? `cek ${new Date(site.last_checked_at)
-                  .toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })
-                  .slice(0, 5)} WIB`
+              ? `cek ${new Date(site.last_checked_at).toLocaleTimeString("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })} WIB`
               : "belum dicek"}
           </span>
         </div>
       </div>
 
-      <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
         {needsVerification ? (
           <Dialog>
             <DialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1 border-amber-500/50 text-xs font-medium text-amber-500 hover:bg-amber-500/10"
-              >
-                <AlertTriangle className="h-3.5 w-3.5" /> Verifikasi Domain
+              <Button size="sm" variant="outline" className="border-warning/40 text-warning">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Verifikasi Domain
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -135,7 +124,7 @@ export function SiteCard({
                   website kamu (agar bisa diakses di {site.url}/webwatch-verify.txt).
                 </p>
                 <p className="text-sm">2. Isi file tersebut dengan kode unik ini:</p>
-                <div className="select-all break-all rounded-lg bg-muted p-3 font-mono text-sm">
+                <div className="select-all break-all rounded-lg border border-border bg-muted p-3 font-mono text-sm">
                   {site.verification_token}
                 </div>
                 <p className="text-sm">
@@ -143,15 +132,17 @@ export function SiteCard({
                 </p>
               </div>
               <Button onClick={() => onVerify?.(site.id)} disabled={verifyPending}>
-                {verifyPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {verifyPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
                 Verifikasi Sekarang
               </Button>
             </DialogContent>
           </Dialog>
         ) : (
-          <Button asChild variant="secondary" size="sm" className="h-8 gap-1 text-xs font-medium">
+          <Button asChild variant="secondary" size="sm">
             <Link to="/sites/$id" params={{ id: site.id }}>
-              Lihat Metrik <ArrowUpRight className="h-3.5 w-3.5" />
+              Lihat Metrik
             </Link>
           </Button>
         )}
@@ -159,21 +150,29 @@ export function SiteCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
             onClick={() => onToggle(site)}
             title={site.is_active ? "Jeda pemantauan" : "Lanjutkan pemantauan"}
           >
-            {site.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {site.is_active ? (
+              <Pause className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Play className="h-4 w-4" aria-hidden="true" />
+            )}
+            <span className="sr-only">
+              {site.is_active ? "Jeda pemantauan" : "Lanjutkan pemantauan"}
+            </span>
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                className="text-muted-foreground hover:bg-danger-surface hover:text-danger"
                 title="Hapus situs"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">Hapus situs</span>
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -187,7 +186,7 @@ export function SiteCard({
               <AlertDialogFooter>
                 <AlertDialogCancel>Batal</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive text-destructive-foreground hover:brightness-95"
                   onClick={() => onRemove(site)}
                 >
                   Hapus

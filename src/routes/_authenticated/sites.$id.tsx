@@ -2,7 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Gauge, History, Loader2, Save, Timer } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Gauge,
+  History,
+  KeyRound,
+  Loader2,
+  Save,
+  Timer,
+} from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -19,17 +28,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard } from "@/components/app/stat-card";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, resolveMonitorStatus } from "@/components/app/status-badge";
+import { CodeBlock } from "@/components/app/code-block";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
 
 export const Route = createFileRoute("/_authenticated/sites/$id")({
   component: SiteDetail,
@@ -45,6 +69,13 @@ const DAY_MS = 86_400_000;
 
 function dayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 type SiteRow = {
@@ -90,6 +121,10 @@ type ApmEventRow = {
 
 type Detail = { site: SiteRow; checks: CheckRow[]; incidents: IncidentRow[] };
 
+function isErrorEvent(eventType: string): boolean {
+  return eventType.toLowerCase().includes("error");
+}
+
 function SiteDetail() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
@@ -113,6 +148,13 @@ function SiteDetail() {
       api<{ events: ApmEventRow[] }>(`/api/sites/events?siteId=${encodeURIComponent(id)}`),
   });
 
+  const [intervalMinutes, setIntervalMinutes] = useState("5");
+  const [failThreshold, setFailThreshold] = useState("2");
+  const [keyword, setKeyword] = useState("");
+  const [checkSsl, setCheckSsl] = useState(false);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [keyName, setKeyName] = useState("");
+
   const createApiKey = useMutation({
     mutationFn: async (name: string) =>
       api<{ ok: boolean; key: string }>("/api/sites/keys", {
@@ -120,16 +162,13 @@ function SiteDetail() {
         body: JSON.stringify({ siteId: id, name }),
       }),
     onSuccess: () => {
-      toast.success("API Key berhasil dibuat");
+      toast.success("API key berhasil dibuat");
+      setKeyName("");
+      setKeyDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["site-keys", id] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
-
-  const [intervalMinutes, setIntervalMinutes] = useState("5");
-  const [failThreshold, setFailThreshold] = useState("2");
-  const [keyword, setKeyword] = useState("");
-  const [checkSsl, setCheckSsl] = useState(false);
 
   const site = detail.data?.site ?? null;
   const all = detail.data?.checks ?? [];
@@ -174,7 +213,7 @@ function SiteDetail() {
       : null;
     return {
       total: inWindow.length,
-      uptime: inWindow.length ? ((up / inWindow.length) * 100).toFixed(2) : "—",
+      uptime: inWindow.length ? ((up / inWindow.length) * 100).toFixed(2) : null,
       avgMs: ms,
     };
   }
@@ -207,39 +246,58 @@ function SiteDetail() {
   }
 
   const recentLog = [...all].reverse().slice(0, 50);
+  const incidents = detail.data?.incidents ?? [];
+  const keys = apiKeys.data?.keys ?? [];
+  const events = apmEvents.data?.events ?? [];
+
+  const status = site ? resolveMonitorStatus(site.current_status, site.is_active) : null;
+
+  const stale =
+    site?.last_checked_at != null &&
+    now - new Date(site.last_checked_at).getTime() > site.interval_seconds * 3000;
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
-      {detail.isLoading && (
+    <div className="space-y-6">
+      {detail.isPending ? (
         <div className="space-y-4">
-          <div className="panel h-12 animate-pulse" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="panel h-24 animate-pulse" />
-            <div className="panel h-24 animate-pulse" />
-            <div className="panel h-24 animate-pulse" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-[104px] rounded-lg" />
+            ))}
           </div>
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
-      )}
-      {!detail.isLoading && !site && (
-        <p className="text-sm text-muted-foreground">Situs tidak ditemukan.</p>
-      )}
-
-      {site && (
+      ) : detail.isError ? (
+        <ErrorState
+          title="Detail situs gagal dimuat"
+          description="Data situs tidak bisa diambil dari server."
+          onRetry={() => void detail.refetch()}
+        />
+      ) : !site ? (
+        <EmptyState
+          icon={CheckCircle2}
+          title="Situs tidak ditemukan"
+          description="Situs yang kamu cari sudah dihapus atau tidak pernah ada."
+          action={
+            <Button asChild variant="outline">
+              <Link to="/monitors">Kembali ke daftar situs</Link>
+            </Button>
+          }
+        />
+      ) : (
         <>
           <PageHeader
-            eyebrow="Site Detail"
+            eyebrow="Detail situs"
             title={site.name || site.url}
             description={site.url}
             actions={
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1 text-xs font-medium text-muted-foreground"
-                >
-                  <Link to="/dashboard">
-                    <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/monitors">
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Daftar situs
                   </Link>
                 </Button>
                 <StatusBadge status={site.current_status} active={site.is_active} />
@@ -247,27 +305,39 @@ function SiteDetail() {
             }
           />
 
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <Timer className="inline h-3.5 w-3.5 text-primary" />
-              tiap {site.interval_seconds / 60}m
+              <Timer className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              diperiksa tiap {Math.max(1, Math.round(site.interval_seconds / 60))} menit
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <History className="inline h-3.5 w-3.5 text-primary" />
-              {site.last_checked_at
-                ? `cek ${new Date(site.last_checked_at)
-                    .toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })
-                    .slice(0, 5)} WIB`
-                : "belum dicek"}
+              <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              {site.last_checked_at ? (
+                <time dateTime={site.last_checked_at} className="tabular-nums">
+                  terakhir dicek {formatDateTime(site.last_checked_at)}
+                </time>
+              ) : (
+                "belum pernah dicek"
+              )}
             </span>
           </div>
+
+          {stale && (
+            <p
+              role="status"
+              className="rounded-lg border border-warning/30 bg-warning-surface px-4 py-3 text-sm text-foreground"
+            >
+              Data pengecekan terakhir sudah melewati jadwal. Monitor mungkin sedang berjalan lambat
+              atau tidak aktif.
+            </p>
+          )}
 
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={CheckCircle2}
               label="Status"
-              value={!site.is_active ? "Paused" : site.current_status.toUpperCase()}
-              sub="real-time monitor"
+              value={status?.label ?? "Tidak Diketahui"}
+              sub={site.is_active ? "pemantauan aktif" : "pemantauan dijeda"}
               tone={
                 !site.is_active
                   ? "paused"
@@ -283,51 +353,58 @@ function SiteDetail() {
                 key={label}
                 icon={Gauge}
                 label={`Uptime ${label}`}
-                value={`${stats.uptime}%`}
+                value={stats.uptime != null ? `${stats.uptime}%` : "Belum ada data"}
                 sub={stats.avgMs != null ? `rata-rata ${stats.avgMs} ms` : "belum ada data"}
               />
             ))}
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-2">
+          <section className="grid gap-4 lg:grid-cols-2">
             <div className="panel p-5">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="font-display text-base font-semibold">Uptime harian</h2>
-                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  30 hari
-                </span>
+                <h2 className="font-display text-base font-semibold text-foreground">
+                  Uptime harian
+                </h2>
+                <Badge variant="neutral">30 hari</Badge>
               </div>
               <div className="mt-4 h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="var(--color-border)"
+                    />
                     <XAxis
                       dataKey="label"
-                      fontSize={10}
-                      stroke="var(--muted-foreground)"
-                      tick={{ fill: "var(--muted-foreground)" }}
+                      fontSize={11}
+                      stroke="var(--color-text-muted)"
+                      tick={{ fill: "var(--color-text-muted)" }}
                       interval="preserveStartEnd"
                     />
                     <YAxis
                       domain={[0, 100]}
-                      fontSize={10}
-                      stroke="var(--muted-foreground)"
-                      tick={{ fill: "var(--muted-foreground)" }}
+                      fontSize={11}
+                      stroke="var(--color-text-muted)"
+                      tick={{ fill: "var(--color-text-muted)" }}
                     />
                     <Tooltip
                       formatter={(value) => {
                         const n = typeof value === "number" ? value : undefined;
-                        return n == null ? ["—", "uptime"] : [`${n.toFixed(1)}%`, "uptime"];
+                        return n == null
+                          ? ["Belum ada data", "uptime"]
+                          : [`${n.toFixed(1)}%`, "uptime"];
                       }}
                       contentStyle={{
-                        background: "var(--background)",
-                        border: "1px solid var(--border)",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
                         borderRadius: 8,
+                        color: "var(--color-text)",
                       }}
                     />
                     <Bar
                       dataKey="uptime"
-                      fill="var(--primary)"
+                      fill="var(--chart-1)"
                       radius={[3, 3, 0, 0]}
                       isAnimationActive={false}
                     />
@@ -338,48 +415,55 @@ function SiteDetail() {
 
             <div className="panel p-5">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="font-display text-base font-semibold">Response time</h2>
-                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  30 hari
-                </span>
+                <h2 className="font-display text-base font-semibold text-foreground">
+                  Waktu respons
+                </h2>
+                <Badge variant="neutral">30 hari</Badge>
               </div>
               <div className="mt-4 h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
                     <defs>
                       <linearGradient id="msFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                        <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="var(--color-border)"
+                    />
                     <XAxis
                       dataKey="label"
-                      fontSize={10}
-                      stroke="var(--muted-foreground)"
-                      tick={{ fill: "var(--muted-foreground)" }}
+                      fontSize={11}
+                      stroke="var(--color-text-muted)"
+                      tick={{ fill: "var(--color-text-muted)" }}
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      fontSize={10}
-                      stroke="var(--muted-foreground)"
-                      tick={{ fill: "var(--muted-foreground)" }}
+                      fontSize={11}
+                      stroke="var(--color-text-muted)"
+                      tick={{ fill: "var(--color-text-muted)" }}
                     />
                     <Tooltip
                       formatter={(value) => {
                         const n = typeof value === "number" ? value : undefined;
-                        return n == null ? ["—", "rata-rata"] : [`${n} ms`, "rata-rata"];
+                        return n == null
+                          ? ["Belum ada data", "rata-rata"]
+                          : [`${n} ms`, "rata-rata"];
                       }}
                       contentStyle={{
-                        background: "var(--background)",
-                        border: "1px solid var(--border)",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
                         borderRadius: 8,
+                        color: "var(--color-text)",
                       }}
                     />
                     <Area
                       type="monotone"
                       dataKey="avgMs"
-                      stroke="var(--primary)"
+                      stroke="var(--chart-2)"
                       strokeWidth={2}
                       fill="url(#msFill)"
                       isAnimationActive={false}
@@ -391,9 +475,9 @@ function SiteDetail() {
           </section>
 
           <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold">Pengaturan</h2>
+            <h2 className="font-display text-base font-semibold text-foreground">Pengaturan</h2>
             <form
-              className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_1fr] sm:items-end"
+              className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end"
               onSubmit={(e) => {
                 e.preventDefault();
                 saveSettings.mutate();
@@ -435,248 +519,323 @@ function SiteDetail() {
                 </Label>
               </div>
               <Button type="submit" disabled={saveSettings.isPending}>
-                {saveSettings.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                <Save className="h-4 w-4" />
+                {saveSettings.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
                 Simpan
               </Button>
             </form>
           </section>
 
           <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold">Integrasi APM & Error Tracking</h2>
+            <h2 className="font-display text-base font-semibold text-foreground">
+              Integrasi APM & error tracking
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Gunakan API Key ini di SDK WebWatch untuk mengirim log dan error dari aplikasimu.
+              Gunakan API key ini di SDK WebWatch untuk mengirim log dan error dari aplikasimu.
             </p>
+
             <div className="mt-4 space-y-4">
-              <ul className="space-y-3">
-                {apiKeys.data?.keys.length === 0 && (
-                  <li className="text-sm text-muted-foreground">Belum ada API Key.</li>
-                )}
-                {apiKeys.data?.keys.map((k) => (
-                  <li
-                    key={k.key}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold">{k.name}</p>
-                      <p className="mt-1 font-mono text-xs text-muted-foreground select-all">
-                        {k.key}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {new Date(k.created_at).toLocaleDateString()}
-                      </span>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 text-xs font-medium">
-                            Cara Pasang
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
-                          <DialogHeader>
-                            <DialogTitle>Cara Memasang SDK (API Key: {k.name})</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-6 py-4">
-                            <div>
-                              <h3 className="font-semibold text-sm mb-2">
-                                1. Frontend (Browser / React / Vue / HTML)
-                              </h3>
-                              <p className="text-xs text-muted-foreground mb-2">
-                                Letakkan di dalam tag <code>&lt;head&gt;</code> pada file index.html
-                                aplikasimu.
-                              </p>
-                              <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
-                                <code className="text-blue-400">&lt;script</code>{" "}
-                                <code className="text-yellow-200">type</code>=
-                                <span className="text-green-300">"module"</span>
-                                <code className="text-blue-400">&gt;</code>
-                                {"\n"}
-                                {"  "}
-                                <code className="text-blue-400">import</code> {"{"} WebWatch {"}"}{" "}
-                                <code className="text-blue-400">from</code>{" "}
-                                <span className="text-green-300">
-                                  "{typeof window !== "undefined" ? window.location.origin : ""}
-                                  /api/public/sdk"
-                                </span>
-                                ;{"\n\n"}
-                                {"  "}WebWatch.init(
-                                <span className="text-green-300">"{k.key}"</span>,{" "}
-                                <span className="text-green-300">
-                                  "{typeof window !== "undefined" ? window.location.origin : ""}
-                                  /api/ingest"
-                                </span>
-                                );{"\n"}
-                                <code className="text-blue-400">&lt;/script&gt;</code>
-                              </pre>
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-sm mb-2">
-                                2. Backend (Node.js / Express)
-                              </h3>
-                              <p className="text-xs text-muted-foreground mb-2">
-                                Letakkan paling bawah sebelum <code>app.listen</code>.
-                              </p>
-                              <pre className="text-xs font-mono bg-muted p-3 rounded-lg overflow-x-auto text-muted-foreground select-all">
-                                <code className="text-blue-400">import</code> {"{"} WebWatch {"}"}{" "}
-                                <code className="text-blue-400">from</code>{" "}
-                                <span className="text-green-300">
-                                  "{typeof window !== "undefined" ? window.location.origin : ""}
-                                  /api/public/sdk"
-                                </span>
-                                ;{"\n\n"}
-                                WebWatch.init(<span className="text-green-300">
-                                  "{k.key}"
-                                </span>,{" "}
-                                <span className="text-green-300">
-                                  "{typeof window !== "undefined" ? window.location.origin : ""}
-                                  /api/ingest"
-                                </span>
-                                );{"\n"}
-                                app.use(WebWatch.expressErrorHandler());
-                              </pre>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                onClick={() => {
-                  const name = prompt("Nama API Key:");
-                  if (name) createApiKey.mutate(name);
-                }}
-                disabled={createApiKey.isPending}
-              >
-                {createApiKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Buat API Key Baru
-              </Button>
-            </div>
-          </section>
-
-          <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold">APM & Error Logs</h2>
-            <div className="mt-4">
-              <ul className="space-y-3">
-                {apmEvents.isLoading && (
-                  <li className="text-sm text-muted-foreground">Memuat...</li>
-                )}
-                {apmEvents.data?.events.length === 0 && (
-                  <li className="text-sm text-muted-foreground">Belum ada error atau log.</li>
-                )}
-                {apmEvents.data?.events.map((ev) => (
-                  <li
-                    key={ev.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-widest ${ev.event_type.includes("error") ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-primary/10 text-primary border border-primary/20"}`}
-                        >
-                          {ev.event_type}
-                        </span>
-                        <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {ev.environment}
-                        </span>
+              {apiKeys.isPending ? (
+                <Skeleton className="h-20 w-full rounded-lg" />
+              ) : apiKeys.isError ? (
+                <ErrorState
+                  className="min-h-[160px]"
+                  title="API key gagal dimuat"
+                  description="Daftar API key tidak bisa diambil dari server."
+                  onRetry={() => void apiKeys.refetch()}
+                />
+              ) : keys.length === 0 ? (
+                <EmptyState
+                  className="min-h-[160px]"
+                  icon={KeyRound}
+                  title="Belum ada API key"
+                  description="Buat API key untuk mulai mengirim log error dari aplikasi kamu."
+                />
+              ) : (
+                <ul className="space-y-3">
+                  {keys.map((k) => (
+                    <li
+                      key={k.key}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{k.name}</p>
+                        <p className="mt-1 select-all break-all font-mono text-xs text-muted-foreground">
+                          {k.key}
+                        </p>
                       </div>
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {new Date(ev.created_at).toLocaleString()}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <time
+                          className="text-xs text-muted-foreground tabular-nums"
+                          dateTime={k.created_at}
+                        >
+                          {new Date(k.created_at).toLocaleDateString("id-ID")}
+                        </time>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              Cara pasang
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl">
+                            <DialogHeader>
+                              <DialogTitle>Cara memasang SDK</DialogTitle>
+                              <DialogDescription>
+                                API key <span className="font-mono">{k.name}</span>. Ganti contoh
+                                domain dan key di bawah dengan milikmu.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-5 py-2">
+                              <div>
+                                <h3 className="mb-2 text-sm font-semibold text-foreground">
+                                  1. Frontend (browser / React / Vue / HTML)
+                                </h3>
+                                <p className="mb-2 text-xs text-muted-foreground">
+                                  Letakkan di dalam tag <code>&lt;head&gt;</code> pada file
+                                  index.html aplikasimu.
+                                </p>
+                                <CodeBlock
+                                  file="index.html"
+                                  code={`<script type="module">
+  import { WebWatch } from "${origin}/api/public/sdk";
+
+  WebWatch.init("${k.key}", "${origin}/api/ingest");
+</script>`}
+                                />
+                              </div>
+                              <div>
+                                <h3 className="mb-2 text-sm font-semibold text-foreground">
+                                  2. Backend (Node.js / Express)
+                                </h3>
+                                <p className="mb-2 text-xs text-muted-foreground">
+                                  Letakkan paling bawah sebelum <code>app.listen</code>.
+                                </p>
+                                <CodeBlock
+                                  file="server.js"
+                                  code={`import { WebWatch } from "${origin}/api/public/sdk";
+
+WebWatch.init("${k.key}", "${origin}/api/ingest");
+
+app.use(WebWatch.expressErrorHandler());`}
+                                />
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" /> Buat API key baru
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Buat API key baru</DialogTitle>
+                    <DialogDescription>
+                      Beri nama agar mudah dikenali, misalnya &ldquo;frontend produksi&rdquo;.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const name = keyName.trim();
+                      if (!name) return;
+                      createApiKey.mutate(name);
+                    }}
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="key-name">Nama API key</Label>
+                      <Input
+                        id="key-name"
+                        value={keyName}
+                        onChange={(e) => setKeyName(e.target.value)}
+                        placeholder="Frontend produksi"
+                        required
+                      />
                     </div>
-                    <p className="text-sm font-semibold">{ev.message}</p>
-                    {(ev.method || ev.url) && (
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {ev.method} {ev.url}
-                      </p>
-                    )}
-                    {ev.stack_trace && (
-                      <pre className="mt-2 w-full overflow-x-auto rounded-md bg-muted p-2 font-mono text-[10px] text-muted-foreground">
-                        {ev.stack_trace}
-                      </pre>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                    <DialogFooter>
+                      <Button type="submit" disabled={createApiKey.isPending || !keyName.trim()}>
+                        {createApiKey.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                        )}
+                        Buat key
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </section>
+
+          <section className="panel p-5">
+            <h2 className="font-display text-base font-semibold text-foreground">Log APM</h2>
+            <div className="mt-4">
+              {apmEvents.isPending ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 rounded-lg" />
+                  ))}
+                </div>
+              ) : apmEvents.isError ? (
+                <ErrorState
+                  className="min-h-[160px]"
+                  title="Log APM gagal dimuat"
+                  description="Data exception tidak bisa diambil dari server."
+                  onRetry={() => void apmEvents.refetch()}
+                />
+              ) : events.length === 0 ? (
+                <EmptyState
+                  className="min-h-[160px]"
+                  icon={History}
+                  title="Belum ada error tercatat"
+                  description="Belum ada exception yang masuk dari SDK WebWatch pada situs ini."
+                />
+              ) : (
+                <ul className="space-y-3">
+                  {events.map((ev) => (
+                    <li
+                      key={ev.id}
+                      className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={isErrorEvent(ev.event_type) ? "danger" : "info"}>
+                            {ev.event_type}
+                          </Badge>
+                          <Badge variant="neutral">{ev.environment}</Badge>
+                        </div>
+                        <time
+                          className="text-xs text-muted-foreground tabular-nums"
+                          dateTime={ev.created_at}
+                        >
+                          {formatDateTime(ev.created_at)}
+                        </time>
+                      </div>
+                      <p className="text-sm font-medium text-foreground">{ev.message}</p>
+                      {(ev.method || ev.url) && (
+                        <p className="break-all font-mono text-xs text-muted-foreground">
+                          {[ev.method, ev.url].filter(Boolean).join(" ")}
+                        </p>
+                      )}
+                      {ev.stack_trace && (
+                        <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                          {ev.stack_trace}
+                        </pre>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
 
           <section className="panel p-5">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-display text-base font-semibold">Insiden</h2>
-              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {detail.data?.incidents.length ?? 0} total
-              </span>
+              <h2 className="font-display text-base font-semibold text-foreground">Insiden</h2>
+              <Badge variant="neutral">{incidents.length} total</Badge>
             </div>
-            <ul className="mt-4 space-y-3">
-              {detail.data?.incidents.length === 0 && (
-                <li className="text-sm text-muted-foreground">Belum ada insiden 🎉</li>
+            <div className="mt-4">
+              {incidents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Belum ada insiden tercatat.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {incidents.map((incident) => (
+                    <li
+                      key={incident.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3.5 py-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Badge variant={incident.resolved_at ? "success" : "danger"}>
+                          {incident.resolved_at ? "Selesai" : "Berlangsung"}
+                        </Badge>
+                        <time
+                          className="text-xs text-foreground tabular-nums"
+                          dateTime={incident.started_at}
+                        >
+                          {formatDateTime(incident.started_at)}
+                        </time>
+                      </div>
+                      <div className="text-xs text-muted-foreground tabular-nums">
+                        {incident.resolved_at
+                          ? `berlangsung ${duration(
+                              new Date(incident.resolved_at).getTime() -
+                                new Date(incident.started_at).getTime(),
+                            )}`
+                          : "masih berlangsung"}
+                      </div>
+                      {incident.error_message && (
+                        <p className="w-full truncate text-xs text-muted-foreground">
+                          {incident.error_message}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
-              {detail.data?.incidents.map((incident) => (
-                <li
-                  key={incident.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/40 px-3.5 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${
-                        incident.resolved_at
-                          ? "bg-[var(--down)]/60"
-                          : "bg-[var(--down)] animate-pulse"
-                      }`}
-                    />
-                    <span className="font-mono text-xs text-foreground">
-                      {new Date(incident.started_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="font-mono text-[11px] text-muted-foreground">
-                    {incident.resolved_at
-                      ? `berlangsung ${duration(
-                          new Date(incident.resolved_at).getTime() -
-                            new Date(incident.started_at).getTime(),
-                        )} · selesai`
-                      : "masih berlangsung"}
-                  </div>
-                  {incident.error_message && (
-                    <p className="w-full truncate font-mono text-[11px] text-muted-foreground">
-                      {incident.error_message}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+            </div>
           </section>
 
           <section className="panel p-5">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-display text-base font-semibold">Riwayat pengecekan</h2>
-              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                50 terakhir
-              </span>
+              <h2 className="font-display text-base font-semibold text-foreground">
+                Riwayat pengecekan
+              </h2>
+              <Badge variant="neutral">50 terakhir</Badge>
             </div>
-            <ul className="mt-4 space-y-2">
-              {recentLog.length === 0 && (
-                <li className="text-sm text-muted-foreground">Belum ada pengecekan.</li>
+            <div className="mt-4">
+              {recentLog.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Belum ada pengecekan.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Waktu</TableHead>
+                      <TableHead>Hasil</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Respons</TableHead>
+                      <TableHead>Keterangan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentLog.map((check) => (
+                      <TableRow key={check.id}>
+                        <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+                          <time dateTime={check.checked_at}>
+                            {formatDateTime(check.checked_at)}
+                          </time>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={check.is_up ? "success" : "danger"}>
+                            {check.is_up ? "Berhasil" : "Gagal"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {check.status_code ?? "Tidak ada"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {check.response_time_ms != null
+                            ? `${check.response_time_ms} ms`
+                            : "Tidak ada"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {check.error_message ?? "Tidak ada"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-              {recentLog.map((check) => (
-                <li
-                  key={check.id}
-                  className="flex flex-wrap items-center gap-3 font-mono text-xs text-muted-foreground"
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${check.is_up ? "bg-[var(--up)]" : "bg-[var(--down)]"}`}
-                  />
-                  <span className="text-foreground">
-                    {new Date(check.checked_at).toLocaleString()}
-                  </span>
-                  <span>{check.status_code ?? "—"}</span>
-                  <span>{check.response_time_ms ?? "—"} ms</span>
-                  {check.error_message && <span>{check.error_message}</span>}
-                </li>
-              ))}
-            </ul>
+            </div>
           </section>
         </>
       )}

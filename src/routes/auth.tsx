@@ -15,20 +15,22 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandLockup } from "@/components/app/brand";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Masuk — WebWatch Uptime Monitor" },
+      { title: "Masuk - WebWatch" },
       {
         name: "description",
         content:
-          "Masuk ke WebWatch dengan OTP via Telegram untuk memantau situs dan dapat alert downtime instan.",
+          "Masuk ke WebWatch dengan kode sekali pakai lewat Telegram untuk memantau situs dan menerima alert downtime.",
       },
-      { property: "og:title", content: "Masuk — WebWatch" },
+      { property: "og:title", content: "Masuk - WebWatch" },
       {
         property: "og:description",
-        content: "Uptime monitoring gratis dengan alert Telegram instan.",
+        content: "Uptime monitoring dengan alert Telegram.",
       },
     ],
   }),
@@ -36,74 +38,71 @@ export const Route = createFileRoute("/auth")({
 });
 
 const SAMPLE_ROWS = [
-  { host: "tokoku.id", ok: true, ms: "128 ms · 200 OK" },
-  { host: "api.tokoku.id", ok: true, ms: "84 ms · 200 OK" },
-  { host: "blog.tokoku.id", ok: false, ms: "timeout · 3x gagal" },
-  { host: "checkout.tokoku.id", ok: true, ms: "213 ms · 200 OK" },
+  { host: "contoh-toko.id", ok: true, ms: "128 ms · 200 OK" },
+  { host: "contoh-api.id", ok: true, ms: "84 ms · 200 OK" },
+  { host: "contoh-blog.id", ok: false, ms: "timeout · 3x gagal" },
+  { host: "contoh-checkout.id", ok: true, ms: "213 ms · 200 OK" },
+];
+
+const PROMISES = [
+  { icon: Timer, label: "Pengecekan tiap menit" },
+  { icon: Bell, label: "Alert lewat Telegram" },
+  { icon: ShieldCheck, label: "Cooldown anti alert berulang" },
 ];
 
 function BrandPanel() {
   return (
-    <div
-      className="hidden min-h-screen flex-col justify-between p-10 lg:flex bg-muted/30"
-      style={{
-        backgroundImage:
-          "radial-gradient(42rem 32rem at 85% -10%, oklch(0.58 0.12 178 / 0.18), transparent 60%), radial-gradient(32rem 28rem at -5% 100%, oklch(0.58 0.12 178 / 0.12), transparent 55%)",
-      }}
-    >
-      <div className="flex items-center gap-2">
-        <img src="/logo.png" alt="WebWatch" className="h-10 w-auto" />
-      </div>
+    <div className="hidden min-h-screen flex-col justify-between bg-surface p-10 lg:flex">
+      <BrandLockup className="h-9 w-auto" />
 
       <div>
         <h2 className="max-w-md font-display text-3xl font-bold leading-tight text-foreground">
-          Website down? <span className="text-primary">Kamu tahu duluan.</span>
+          Website down? Kamu tahu duluan.
         </h2>
-        <p className="mt-4 max-w-md text-sm text-muted-foreground font-medium">
+        <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
           Tiap menit dipantau, alert Telegram terkirim langsung saat ada gangguan dan saat semuanya
           pulih kembali.
         </p>
 
-        <div className="mt-8 rounded-xl border border-border bg-card p-4 shadow-panel">
+        <div className="panel mt-8 p-4">
           <ul className="divide-y divide-border">
             {SAMPLE_ROWS.map((row) => (
               <li key={row.host} className="flex items-center gap-3 py-2.5">
                 <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? "bg-primary" : "bg-red-400"}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? "bg-up" : "bg-danger"}`}
+                  aria-hidden="true"
                 />
                 <span className="flex-1 font-mono text-sm font-medium text-foreground">
                   {row.host}
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">{row.ms}</span>
+                <span className="font-mono text-xs text-muted-foreground">{row.ms}</span>
               </li>
             ))}
           </ul>
-          <div className="mt-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              telegram · baru saja
-            </p>
+          <div className="mt-3 rounded-lg border border-border bg-muted px-3 py-2.5">
+            <p className="font-mono text-xs text-muted-foreground">telegram · 12:03</p>
             <p className="mt-1 text-sm font-medium text-foreground">
-              <span className="font-bold text-red-500">DOWN</span>
-              <span className="text-muted-foreground"> — blog.tokoku.id</span>
+              <span className="font-semibold text-danger">DOWN</span>
+              <span className="text-muted-foreground"> · contoh-blog.id</span>
             </p>
-            <p className="font-mono text-[11px] font-medium text-muted-foreground/80 mt-1">
-              Error: Timeout (&gt;10s) · gagal berturut-turut: 3x · durasi 02:14
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              timeout · gagal berturut-turut 3x · durasi 02:14
             </p>
           </div>
+          <Badge variant="neutral" className="mt-3">
+            Contoh tampilan, bukan monitoring nyata
+          </Badge>
         </div>
       </div>
 
-      <div className="flex items-center gap-6 font-mono text-[11px] uppercase tracking-widest font-semibold text-muted-foreground/80">
-        <span className="flex items-center gap-2">
-          <Timer className="h-4 w-4 text-primary" /> interval 1 menit
-        </span>
-        <span className="flex items-center gap-2">
-          <Bell className="h-4 w-4 text-primary" /> alert instan
-        </span>
-        <span className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-primary" /> anti false alarm
-        </span>
-      </div>
+      <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+        {PROMISES.map((promise) => (
+          <li key={promise.label} className="flex items-center gap-2">
+            <promise.icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            {promise.label}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -190,14 +189,14 @@ function AuthPage() {
         });
         const data = (await res.json()) as { status?: string };
         if (data.status === "linked") {
-          if (pollingRef.current == null) return; // Already cleared by a concurrent poll
+          if (pollingRef.current == null) return;
           window.clearInterval(pollingRef.current);
           pollingRef.current = null;
           await requestOtp(email);
           setStep("code");
         }
       } catch {
-        // transient network hiccup — keep polling
+        // transient network hiccup, keep polling
       }
     }, 2500);
   }
@@ -251,29 +250,27 @@ function AuthPage() {
   }
 
   return (
-    <main className="marketing min-h-screen">
-      <div className="grid lg:grid-cols-2">
+    <main className="flex min-h-screen">
+      <div className="grid w-full lg:grid-cols-2">
         <BrandPanel />
 
         <div className="flex min-h-screen flex-col justify-center px-4 py-12 sm:px-8 lg:px-12">
           <Link
             to="/"
-            className="mb-8 inline-flex items-center gap-2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="mb-8 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
             kembali ke beranda
           </Link>
 
           <div className="mx-auto w-full max-w-md">
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="WebWatch" className="h-8 w-auto" />
-            </div>
+            <BrandLockup className="h-8 w-auto" />
 
             <h1 className="mt-6 font-display text-2xl font-bold tracking-tight text-foreground">
               Masuk ke dashboard
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Login tanpa password — kode masuk dikirim ke Telegram.
+              Login tanpa password, kode masuk dikirim ke Telegram.
             </p>
 
             {step === "email" && (
@@ -291,11 +288,11 @@ function AuthPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Lanjut
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Kirim kode masuk
                 </Button>
                 <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Kode 6 digit dikirim lewat bot Telegram. Belum punya bot? Nanti kamu bisa set
                   langsung.
                 </p>
@@ -304,25 +301,28 @@ function AuthPage() {
 
             {step === "link" && (
               <div className="mt-6 space-y-4">
-                <div className="rounded-xl border border-border bg-card p-4">
+                <div className="panel p-4">
                   <div className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                    <CheckCircle2
+                      className="mt-0.5 h-5 w-5 shrink-0 text-success"
+                      aria-hidden="true"
+                    />
                     <div>
                       <p className="text-sm font-semibold text-foreground">Hubungkan Telegram</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Buka bot lalu tekan <span className="font-mono text-xs">Start</span>.
-                        Setelah terhubung, kode masuk otomatis dikirim ke chat.
+                        Buka bot lalu tekan Start. Setelah terhubung, kode masuk otomatis dikirim ke
+                        chat.
                       </p>
                     </div>
                   </div>
                 </div>
                 <Button className="w-full" onClick={openTelegram}>
-                  <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
                   Buka bot Telegram
                 </Button>
                 <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Menunggu koneksi Telegram…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Menunggu koneksi Telegram
                 </p>
                 <button
                   type="button"
@@ -356,8 +356,8 @@ function AuthPage() {
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading || code.length !== 6}>
-                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Verifikasi & masuk
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Verifikasi dan masuk
                 </Button>
                 <button
                   type="button"

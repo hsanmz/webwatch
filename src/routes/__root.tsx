@@ -10,24 +10,25 @@ import {
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { resolveSystemStatus } from "@/components/app/status-badge";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <p className="font-display text-7xl font-bold text-foreground">404</p>
+        <h1 className="mt-4 font-display text-xl font-semibold text-foreground">
+          Halaman tidak ditemukan
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          Alamat yang kamu buka tidak ada atau sudah dipindahkan.
         </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
-          </Link>
+        <div className="mt-6 flex justify-center">
+          <Button asChild>
+            <Link to="/">Kembali ke beranda</Link>
+          </Button>
         </div>
       </div>
     </div>
@@ -41,28 +42,24 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+        <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">
+          Halaman ini gagal dimuat
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Ada masalah di sisi kami. Coba muat ulang, atau kembali ke beranda.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
+          <Button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
-          </a>
+            Coba lagi
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/">Kembali ke beranda</Link>
+          </Button>
         </div>
       </div>
     </div>
@@ -74,12 +71,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#01A471" },
-      { title: "WebWatch — Uptime Monitor with Telegram Alerts" },
+      // Browser chrome cannot read a CSS variable, so the value mirrors
+      // --brand-700 from src/styles.css.
+      { name: "theme-color", content: "#078765" },
+      { title: "WebWatch: Uptime Monitor dengan Alert Telegram" },
       {
         name: "description",
         content:
-          "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
       },
       { property: "og:type", content: "website" },
       { property: "og:image", content: "/og.png" },
@@ -87,21 +86,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "WebWatch — Uptime Monitor with Telegram Alerts",
+        content: "WebWatch: Uptime Monitor dengan Alert Telegram",
       },
-      { property: "og:title", content: "WebWatch — Uptime Monitor with Telegram Alerts" },
+      { property: "og:title", content: "WebWatch: Uptime Monitor dengan Alert Telegram" },
       {
         property: "og:description",
         content:
-          "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
       },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "/og.png" },
-      { name: "twitter:title", content: "WebWatch — Uptime Monitor with Telegram Alerts" },
+      { name: "twitter:title", content: "WebWatch: Uptime Monitor dengan Alert Telegram" },
       {
         name: "twitter:description",
         content:
-          "Monitor your websites every minute and get instant Telegram alerts when they go down or recover.",
+          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
       },
     ],
     links: [
@@ -110,10 +109,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon", sizes: "any" },
-      { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "512x512" },
+      { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "256x256" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
       { rel: "manifest", href: "/site.webmanifest" },
     ],
@@ -126,7 +125,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <head>
         <HeadContent />
       </head>
@@ -151,39 +150,34 @@ function GlobalSystemStatus() {
     refetchInterval: 60000,
   });
 
-  const status = isError ? "outage" : data?.status || "operational";
-
-  const color =
-    status === "operational"
-      ? "bg-emerald-500"
-      : status === "degraded"
-        ? "bg-yellow-500"
-        : "bg-red-500";
-
-  const text =
-    status === "operational"
-      ? "All Systems Operational"
-      : status === "degraded"
-        ? "Degraded System Performance"
-        : "Major System Outage";
-
   if (isLoading) return null;
 
+  const status = isError ? "unknown" : (data?.status ?? "unknown");
+  const state = resolveSystemStatus(status);
+
+  const dot =
+    state.key === "operational"
+      ? "bg-up"
+      : state.key === "degraded"
+        ? "bg-degraded"
+        : state.key === "outage"
+          ? "bg-down"
+          : "bg-paused";
+
   return (
-    <div className="fixed bottom-4 right-4 z-[9999]">
+    <div className="fixed bottom-4 right-4 z-50">
       <Link
         to="/status"
-        className="flex items-center gap-2.5 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 text-xs font-medium font-mono text-muted-foreground shadow-lg hover:text-foreground hover:shadow-xl transition-all"
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-2.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground shadow-lg transition-colors hover:text-foreground"
       >
-        <span className="relative flex h-2 w-2">
-          {status === "operational" && (
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}
-            ></span>
-          )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`}></span>
-        </span>
-        {text}
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${dot} ${state.key === "operational" ? "live-dot" : ""}`}
+          aria-hidden="true"
+        />
+        <span className="sr-only">Status sistem WebWatch: </span>
+        {state.label}
       </Link>
     </div>
   );
