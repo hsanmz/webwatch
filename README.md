@@ -277,11 +277,10 @@ await WebWatch.capture(
 );
 ```
 
-> Paket `packages/webwatch-sdk/` sudah lengkap dan diuji di dalam repo ini
-> (`bun run build:sdk` + vitest), tapi **belum dipublikasikan ke registry npm**. Hingga saat itu,
-> kanal tanpa-install (`/api/public/sdk`) adalah satu-satunya jalur tanpa npm. Kedua kanal
-> merupakan implementasi terpisah atas kontrak yang sama — lihat
-> [DESIGN.md](DESIGN.md) untuk daftar gap terkini.
+> Paket `@webwatch/sdk@0.1.0` sudah tersedia di registry npm. Source-nya ada di
+> `packages/webwatch-sdk/` (build `bun run build:sdk`, diuji vitest). Kanal tanpa-install tetap
+> tersedia lewat `/api/public/sdk`. Kedua kanal merupakan implementasi terpisah atas kontrak
+> yang sama, lihat [DESIGN.md](DESIGN.md) untuk daftar gap terkini.
 
 ---
 
@@ -350,14 +349,15 @@ wrangler.jsonc                       # Konfigurasi Worker utama
 Ini gap implementasi nyata yang terdokumentasi di [DESIGN.md](DESIGN.md), dicantumkan agar
 ekspektasi benar sebelum deploy:
 
-| Gap                                                 | Dampak                                                         |
-| --------------------------------------------------- | -------------------------------------------------------------- |
-| `/api/ingest` tanpa rate limiting                   | Satu API key bisa memasukkan baris tanpa batas                 |
-| `apm_events` tidak pernah di-purge                  | Tabel tumbuh tanpa batas                                       |
-| API key disimpan plaintext di `api_keys.key`        | Rotasi/revocation terbatas pada pembuatan & daftar             |
-| SSRF guard hanya memeriksa hostname string          | Hostname yang resolve ke IP privat bisa lolos                  |
-| `is_active` situs dipakai dobel (toggle ingest APM) | Tidak ada konsep jeda "pantau tapi simpan"                     |
-| `@webwatch/sdk` belum dipublikasikan ke npm         | Jalur tanpa-install satu-satunya; kanal CDN bisa beda perilaku |
+| Gap                                                 | Dampak                                             |
+| --------------------------------------------------- | -------------------------------------------------- |
+| `/api/ingest` tanpa rate limiting                   | Satu API key bisa memasukkan baris tanpa batas     |
+| `apm_events` tidak pernah di-purge                  | Tabel tumbuh tanpa batas                           |
+| API key disimpan plaintext di `api_keys.key`        | Rotasi/revocation terbatas pada pembuatan & daftar |
+| SSRF guard hanya memeriksa hostname string          | Hostname yang resolve ke IP privat bisa lolos      |
+| SSRF guard hanya memeriksa hostname string          | Hostname yang resolve ke IP privat bisa lolos      |
+| `is_active` situs dipakai dobel (toggle ingest APM) | Tidak ada konsep jeda "pantau tapi simpan"         |
+| Kanal CDN vs paket npm: dua implementasi terpisah   | Bisa beda perilaku; lihat gap G0 di DESIGN.md      |
 
 Punya beberapa menit ekstra? Baca
 [DESIGN.md](DESIGN.md) untuk model data, alur keamanan, dan daftar gap lengkap sebelum

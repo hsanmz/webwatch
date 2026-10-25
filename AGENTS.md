@@ -231,10 +231,9 @@ silently — mention it in your summary.
 
 The most common traps:
 
-- `@webwatch/sdk` is complete and tested **in this repo** but is **not yet published** to the
-  npm registry; until it is published, the CDN build at `/api/public/sdk` remains the only
-  no-install path. The CDN build and the npm package are two separate implementations of the
-  same contract — they drift independently.
+- `@webwatch/sdk@0.1.0` is published to the npm registry. The CDN build at `/api/public/sdk`
+  remains the no-install path, and both are separate implementations of the same contract that
+  drift independently (DESIGN.md gap G0).
 - `/api/ingest` has no rate limiting.
 - `apm_events` are never purged.
 - API keys are stored **in plaintext** (`api_keys.key`); there is no hashing and no revocation

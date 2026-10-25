@@ -447,7 +447,7 @@ limit 2 to detect ambiguity).
 
 ## 13. The `@webwatch/sdk` npm Package
 
-Source: `packages/webwatch-sdk/` — TypeScript, zero runtime dependencies, published as ESM
+Source: `packages/webwatch-sdk/` — TypeScript, zero runtime dependencies, distributed as ESM
 (`NodeNext`), build via `bun run build:sdk` → `dist/`. Engine: Node ≥ 18 (also Bun; browser via
 bundler).
 
@@ -526,7 +526,7 @@ and vitest picks up `packages/webwatch-sdk/src/*.test.ts` (§18).
 window listeners, an express handler, and a `fetch`-per-event `capture` — no batching, no
 retry budget). It covers the "no npm install" niche. The npm package and this script are
 **separate implementations of the same ingest contract** and can drift independently (§19 gap
-G0b). Do not let one gain features the contract does not have.
+G0). Do not let one gain features the contract does not have.
 
 ---
 
@@ -645,8 +645,7 @@ relying on it.
 
 | #   | Gap                                                                                                            | Impact                                                                              | Suggested fix                                                                       |
 | --- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| G0  | `@webwatch/sdk` is not published to the npm registry yet                                                       | The only no-install path is the CDN build; npm instructions don't work externally   | `npm publish` from `packages/webwatch-sdk/` once the contract is stable             |
-| G0b | The CDN build (`/api/public/sdk`) and the npm SDK are two separate implementations of one contract             | They drift independently (CDN build lacks batching/retry/throttle; per-event fetch) | Generate the CDN build from the npm source (shared core + browser adapter)          |
+| G0  | The CDN build (`/api/public/sdk`) and the published npm SDK are two separate implementations of one contract   | They drift independently (CDN build lacks batching/retry/throttle; per-event fetch) | Generate the CDN build from the npm source (shared core + browser adapter)          |
 | G1  | `POST /api/ingest` wraps **all** DB failures in a catch-all returning `bad_request` (400)                      | Server-side faults masquerade as client faults; SDKs cannot distinguish             | Narrow the `catch` and return `server_error` (500) for storage failures             |
 | G2  | No rate limiting on `/api/ingest`                                                                              | One valid key can insert unbounded rows (cost amplification)                        | Per-key token bucket (Durable Objects or Workers Rate Limiting binding)             |
 | G3  | `apm_events` is never purged; `telegram_links`/`otp_codes` rows accumulate until ad-hoc cleanup                | Unbounded storage growth                                                            | Scheduled purge worker + retention window per `created_at` (schema already indexed) |

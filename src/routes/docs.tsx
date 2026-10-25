@@ -459,13 +459,12 @@ app.listen(3000);`}
 
         <Callout tone="neutral" title="Tentang paket npm">
           <p>
-            Source paket <IC>@webwatch/sdk</IC> tersedia di folder <IC>packages/webwatch-sdk</IC>{" "}
-            dan bisa dipasang lewat npm/bun: set env <IC>WEBWATCH_KEY</IC> dan <IC>WEBWATCH_URL</IC>
-            , lalu <IC>{'import "@webwatch/sdk"'}</IC> sekali di entrypoint — unhandled error dan
-            unhandled rejection langsung terkirim dengan batching dan retry. Helper siap pakai
-            tersedia untuk Express, Hono, Fastify, dan Next.js. Catatan: paket ini belum
-            dipublikasikan ke registry npm, sementara itu gunakan modul yang disajikan dari{" "}
-            <IC>/api/public/sdk</IC>.
+            Source paket <IC>@webwatch/sdk</IC> sudah tersedia di registry npm. Set env{" "}
+            <IC>WEBWATCH_KEY</IC> dan <IC>WEBWATCH_URL</IC>, lalu{" "}
+            <IC>{'import "@webwatch/sdk"'}</IC> sekali di entrypoint: unhandled error dan unhandled
+            rejection langsung terkirim dengan batching dan retry. Helper siap pakai tersedia untuk
+            Express, Hono, Fastify, dan Next.js. Untuk browser tanpa npm, gunakan modul yang
+            disajikan dari <IC>/api/public/sdk</IC>.
           </p>
         </Callout>
       </>
