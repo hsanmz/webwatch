@@ -3,26 +3,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  Activity,
   ArrowLeft,
+  Bell,
   CheckCircle2,
-  Gauge,
-  History,
+  ChevronDown,
+  ExternalLink,
   KeyRound,
   Loader2,
+  MoreHorizontal,
   Save,
-  Timer,
+  Settings,
+  TriangleAlert,
+  X,
 } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,36 +34,32 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip as TooltipPrimitive,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard } from "@/components/app/stat-card";
-import { StatusBadge, resolveMonitorStatus } from "@/components/app/status-badge";
 import { CodeBlock } from "@/components/app/code-block";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorState } from "@/components/app/error-state";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/sites/$id")({
   component: SiteDetail,
 });
-
-function duration(ms: number) {
-  const minutes = Math.max(1, Math.round(ms / 60000));
-  const hours = Math.floor(minutes / 60);
-  return hours ? `${hours} jam ${minutes % 60} menit` : `${minutes} menit`;
-}
-
-const DAY_MS = 86_400_000;
-
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("id-ID", {
@@ -78,33 +68,25 @@ function formatDateTime(value: string): string {
   });
 }
 
+function formatRelativeTime(value: string): string {
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes}m lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}j lalu`;
+  const days = Math.floor(hours / 24);
+  return `${days}h lalu`;
+}
+
 type SiteRow = {
   id: string;
   name: string | null;
   url: string;
-  current_status: string;
   is_active: boolean;
-  interval_seconds: number;
-  fail_threshold: number;
-  check_keyword: string | null;
-  check_ssl: boolean;
-  last_checked_at: string | null;
-};
-
-type CheckRow = {
-  id: string;
-  is_up: boolean;
-  status_code: number | null;
-  response_time_ms: number | null;
-  error_message: string | null;
-  checked_at: string;
-};
-
-type IncidentRow = {
-  id: string;
-  started_at: string;
-  resolved_at: string | null;
-  error_message: string | null;
+  verification_status: string;
+  verification_token: string | null;
+  created_at: string;
 };
 
 type ApmEventRow = {
@@ -119,20 +101,121 @@ type ApmEventRow = {
   created_at: string;
 };
 
-type Detail = { site: SiteRow; checks: CheckRow[]; incidents: IncidentRow[] };
+type Detail = { site: SiteRow; events: ApmEventRow[] };
 
 function isErrorEvent(eventType: string): boolean {
   return eventType.toLowerCase().includes("error");
 }
 
+/* ── Section header with consistent styling ── */
+function SectionHeader({
+  icon: Icon,
+  title,
+  trailing,
+}: {
+  icon: React.ElementType;
+  title: string;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <h2 className="font-display text-sm font-semibold text-foreground">{title}</h2>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+/* ── Status badge ── */
+function StatusChip({ status, active }: { status: string; active: boolean }) {
+  const isVerified = status === "verified";
+  return (
+    <Badge variant={isVerified ? "success" : "warning"} className="gap-1">
+      {isVerified ? <CheckCircle2 className="h-3 w-3" /> : <TriangleAlert className="h-3 w-3" />}
+      {isVerified ? "Terverifikasi" : "Pending Verifikasi"}
+    </Badge>
+  );
+}
+
+/* ── Copy to clipboard button ── */
+function CopyButton({ value, label = "Salin" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <TooltipPrimitive>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 gap-1">
+          {copied ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+          ) : (
+            <ExternalLink className="h-3.5 w-3.5" />
+          )}
+          <span className="hidden sm:inline">{copied ? "Tersalin" : label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center">
+        {copied ? "Tersalin ke clipboard" : `Salin ${label.toLowerCase()}`}
+      </TooltipContent>
+    </TooltipPrimitive>
+  );
+}
+
+/* ── Refresh button with loading ── */
+function RefreshButton({
+  onClick,
+  disabled,
+  title = "Refresh",
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <TooltipPrimitive>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={title}
+        >
+          <Loader2 className={cn("h-4 w-4", disabled ? "animate-spin" : "")} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{title}</TooltipContent>
+    </TooltipPrimitive>
+  );
+}
+
 function SiteDetail() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"overview" | "apm" | "settings">("overview");
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [keyName, setKeyName] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [siteName, setSiteName] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const handleTabChange = (value: string) => setActiveTab(value as "overview" | "apm" | "settings");
 
   const detail = useQuery({
     queryKey: ["site-detail", id],
     queryFn: () => api<Detail>(`/api/sites/detail?id=${encodeURIComponent(id)}`),
   });
+  const refetchDetail = () => detail.refetch();
+  const {
+    data: detailData,
+    isPending: detailIsPending,
+    isError: detailIsError,
+    isFetching: detailIsFetching,
+  } = detail;
 
   const apiKeys = useQuery({
     queryKey: ["site-keys", id],
@@ -141,19 +224,6 @@ function SiteDetail() {
         `/api/sites/keys?siteId=${encodeURIComponent(id)}`,
       ),
   });
-
-  const apmEvents = useQuery({
-    queryKey: ["site-events", id],
-    queryFn: () =>
-      api<{ events: ApmEventRow[] }>(`/api/sites/events?siteId=${encodeURIComponent(id)}`),
-  });
-
-  const [intervalMinutes, setIntervalMinutes] = useState("5");
-  const [failThreshold, setFailThreshold] = useState("2");
-  const [keyword, setKeyword] = useState("");
-  const [checkSsl, setCheckSsl] = useState(false);
-  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
-  const [keyName, setKeyName] = useState("");
 
   const createApiKey = useMutation({
     mutationFn: async (name: string) =>
@@ -170,675 +240,688 @@ function SiteDetail() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const site = detail.data?.site ?? null;
-  const all = detail.data?.checks ?? [];
-
-  useEffect(() => {
-    if (!site) return;
-    setIntervalMinutes(String(Math.max(1, Math.round(site.interval_seconds / 60))));
-    setFailThreshold(String(site.fail_threshold));
-    setKeyword(site.check_keyword ?? "");
-    setCheckSsl(site.check_ssl);
-  }, [site]);
-
   const saveSettings = useMutation({
     mutationFn: async () =>
       api<{ ok: boolean }>("/api/sites", {
         method: "PATCH",
         body: JSON.stringify({
           id,
-          intervalMinutes: Math.max(1, Number(intervalMinutes) || 5),
-          failThreshold: Math.max(1, Number(failThreshold) || 2),
-          keyword: keyword.trim() || null,
-          ssl: checkSsl,
+          name: siteName.trim() || null,
+          is_active: isActive,
         }),
       }),
     onSuccess: () => {
       toast.success("Pengaturan disimpan");
+      setSettingsOpen(false);
       queryClient.invalidateQueries({ queryKey: ["site-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const verifySite = useMutation({
+    mutationFn: async () =>
+      api<{ ok: boolean }>("/api/sites/verify", {
+        method: "POST",
+        body: JSON.stringify({ siteId: id }),
+      }),
+    onSuccess: () => {
+      toast.success("Verifikasi berhasil");
+      queryClient.invalidateQueries({ queryKey: ["site-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const site = detailData?.site ?? null;
+  const events = detailData?.events ?? [];
+  const keys = apiKeys.data?.keys ?? [];
+
   const now = Date.now();
 
-  function uptimeFor(windowMs: number) {
-    const inWindow = all.filter((c) => now - new Date(c.checked_at).getTime() <= windowMs);
-    const up = inWindow.filter((c) => c.is_up).length;
-    const ms = inWindow.length
-      ? Math.round(
-          inWindow.reduce((sum, c) => sum + (c.response_time_ms ?? 0), 0) / inWindow.length,
-        )
-      : null;
-    return {
-      total: inWindow.length,
-      uptime: inWindow.length ? ((up / inWindow.length) * 100).toFixed(2) : null,
-      avgMs: ms,
-    };
+  useEffect(() => {
+    if (site) {
+      setSiteName(site.name ?? "");
+      setIsActive(site.is_active);
+    }
+  }, [site]);
+
+  /* ── Loading / Error / Empty ── */
+  if (detailIsPending) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-16 w-full rounded-lg" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Skeleton className="h-64 rounded-lg" />
+          <Skeleton className="h-64 rounded-lg" />
+        </div>
+      </div>
+    );
   }
 
-  const windows = {
-    "24 jam": uptimeFor(DAY_MS),
-    "7 hari": uptimeFor(7 * DAY_MS),
-    "30 hari": uptimeFor(30 * DAY_MS),
-  };
-
-  const byDay = new Map<string, { total: number; up: number; ms: number }>();
-  for (const c of all) {
-    const key = dayKey(new Date(c.checked_at));
-    const bucket = byDay.get(key) ?? { total: 0, up: 0, ms: 0 };
-    bucket.total += 1;
-    if (c.is_up) bucket.up += 1;
-    bucket.ms += c.response_time_ms ?? 0;
-    byDay.set(key, bucket);
+  if (detailIsError) {
+    return (
+      <ErrorState
+        title="Detail situs gagal dimuat"
+        description="Data situs tidak bisa diambil dari server."
+        onRetry={() => void refetchDetail()}
+      />
+    );
   }
 
-  const daily: { label: string; uptime: number | null; avgMs: number | null }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(now - i * DAY_MS);
-    const bucket = byDay.get(dayKey(date));
-    daily.push({
-      label: date.toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
-      uptime: bucket?.total ? (bucket.up / bucket.total) * 100 : null,
-      avgMs: bucket?.total ? Math.round(bucket.ms / bucket.total) : null,
-    });
+  if (!site) {
+    return (
+      <EmptyState
+        icon={CheckCircle2}
+        title="Situs tidak ditemukan"
+        description="Situs yang kamu cari sudah dihapus atau tidak pernah ada."
+        action={
+          <Button asChild variant="outline">
+            <Link to="/dashboard">Kembali ke Dashboard</Link>
+          </Button>
+        }
+      />
+    );
   }
-
-  const recentLog = [...all].reverse().slice(0, 50);
-  const incidents = detail.data?.incidents ?? [];
-  const keys = apiKeys.data?.keys ?? [];
-  const events = apmEvents.data?.events ?? [];
-
-  const status = site ? resolveMonitorStatus(site.current_status, site.is_active) : null;
-
-  const stale =
-    site?.last_checked_at != null &&
-    now - new Date(site.last_checked_at).getTime() > site.interval_seconds * 3000;
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
+  /* ── Render ── */
   return (
     <div className="space-y-6">
-      {detail.isPending ? (
-        <div className="space-y-4">
-          <Skeleton className="h-16 w-full rounded-lg" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-[104px] rounded-lg" />
-            ))}
-          </div>
-          <Skeleton className="h-64 w-full rounded-lg" />
-        </div>
-      ) : detail.isError ? (
-        <ErrorState
-          title="Detail situs gagal dimuat"
-          description="Data situs tidak bisa diambil dari server."
-          onRetry={() => void detail.refetch()}
-        />
-      ) : !site ? (
-        <EmptyState
-          icon={CheckCircle2}
-          title="Situs tidak ditemukan"
-          description="Situs yang kamu cari sudah dihapus atau tidak pernah ada."
-          action={
-            <Button asChild variant="outline">
-              <Link to="/monitors">Kembali ke daftar situs</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <PageHeader
-            eyebrow="Detail situs"
-            title={site.name || site.url}
-            description={site.url}
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="ghost" size="sm">
-                  <Link to="/monitors">
-                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Daftar situs
-                  </Link>
+      {/* ── Page Header ── */}
+      <PageHeader
+        eyebrow="Detail Situs"
+        title={site.name || new URL(site.url).hostname.replace(/^www\./, "")}
+        description={site.url}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <RefreshButton onClick={() => refetchDetail()} disabled={detailIsFetching} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-                <StatusBadge status={site.current_status} active={site.is_active} />
-              </div>
-            }
-          />
-
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <Timer className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              diperiksa tiap {Math.max(1, Math.round(site.interval_seconds / 60))} menit
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              {site.last_checked_at ? (
-                <time dateTime={site.last_checked_at} className="tabular-nums">
-                  terakhir dicek {formatDateTime(site.last_checked_at)}
-                </time>
-              ) : (
-                "belum pernah dicek"
-              )}
-            </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Tindakan</DropdownMenuLabel>
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard">
+                    <ArrowLeft className="h-4 w-4" /> Kembali ke Dashboard
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                  <Settings className="h-4 w-4" /> Pengaturan
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setActiveTab("apm")}>
+                  <Activity className="h-4 w-4" /> Log APM
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <StatusChip status={site.verification_status} active={site.is_active} />
           </div>
+        }
+      />
 
-          {stale && (
-            <p
-              role="status"
-              className="rounded-lg border border-warning/30 bg-warning-surface px-4 py-3 text-sm text-foreground"
-            >
-              Data pengecekan terakhir sudah melewati jadwal. Monitor mungkin sedang berjalan lambat
-              atau tidak aktif.
-            </p>
-          )}
+      {/* ── Verification Banner ── */}
+      {site.verification_status === "pending" && site.verification_token && (
+        <section className="panel border-warning/30 bg-warning-surface p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="font-display text-sm font-semibold text-foreground">
+                Verifikasi Kepemilikan Domain
+              </h3>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                Agar log error diterima, buktikan bahwa kamu pemilik{" "}
+                <code className="font-mono bg-muted px-1.5 rounded">{site.url}</code>.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="select-all font-mono text-xs bg-muted px-2 py-1 rounded">
+                {site.verification_token}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => verifySite.mutate()}
+                disabled={verifySite.isPending}
+              >
+                {verifySite.isPending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    Memverifikasi...
+                  </>
+                ) : (
+                  "Verifikasi Sekarang"
+                )}
+              </Button>
+            </div>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Buat file <code className="bg-muted px-1 rounded">webwatch-verify.txt</code> di root
+            website kamu (agar bisa diakses di{" "}
+            <code className="font-mono bg-muted px-1 rounded">
+              {new URL(site.url).origin}/webwatch-verify.txt
+            </code>
+            ) dan isi dengan kode unik di atas. Klik tombol verifikasi setelah file di-upload.
+          </p>
+        </section>
+      )}
 
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={CheckCircle2}
-              label="Status"
-              value={status?.label ?? "Tidak Diketahui"}
-              sub={site.is_active ? "pemantauan aktif" : "pemantauan dijeda"}
-              tone={
-                !site.is_active
-                  ? "paused"
-                  : site.current_status === "up"
-                    ? "up"
-                    : site.current_status === "down"
-                      ? "down"
-                      : "default"
+      {/* ── Stat Row ── */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          icon={Activity}
+          label="Total Error (30 hari)"
+          value={events.length}
+          sub="event tercatat"
+        />
+        <StatCard
+          icon={TriangleAlert}
+          label="Error"
+          value={events.filter((e) => isErrorEvent(e.event_type)).length}
+          sub="butuh perhatian"
+          tone="down"
+        />
+        <StatCard icon={Bell} label="API Keys" value={keys.length} sub="terbuat untuk situs ini" />
+      </section>
+
+      {/* ── Tabs Content ── */}
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        {/* ── OVERVIEW ── */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Recent errors */}
+          <div className="panel overflow-hidden">
+            <SectionHeader
+              icon={Activity}
+              title="Error Terbaru"
+              trailing={
+                <div className="flex items-center gap-2">
+                  <RefreshButton onClick={() => refetchDetail()} disabled={detailIsFetching} />
+                  <Badge variant="neutral">{events.length} event</Badge>
+                </div>
               }
             />
-            {Object.entries(windows).map(([label, stats]) => (
-              <StatCard
-                key={label}
-                icon={Gauge}
-                label={`Uptime ${label}`}
-                value={stats.uptime != null ? `${stats.uptime}%` : "Belum ada data"}
-                sub={stats.avgMs != null ? `rata-rata ${stats.avgMs} ms` : "belum ada data"}
-              />
-            ))}
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="panel p-5">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="font-display text-base font-semibold text-foreground">
-                  Uptime harian
-                </h2>
-                <Badge variant="neutral">30 hari</Badge>
-              </div>
-              <div className="mt-4 h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="var(--color-border)"
-                    />
-                    <XAxis
-                      dataKey="label"
-                      fontSize={11}
-                      stroke="var(--color-text-muted)"
-                      tick={{ fill: "var(--color-text-muted)" }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      fontSize={11}
-                      stroke="var(--color-text-muted)"
-                      tick={{ fill: "var(--color-text-muted)" }}
-                    />
-                    <Tooltip
-                      formatter={(value) => {
-                        const n = typeof value === "number" ? value : undefined;
-                        return n == null
-                          ? ["Belum ada data", "uptime"]
-                          : [`${n.toFixed(1)}%`, "uptime"];
-                      }}
-                      contentStyle={{
-                        background: "var(--color-surface)",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: 8,
-                        color: "var(--color-text)",
-                      }}
-                    />
-                    <Bar
-                      dataKey="uptime"
-                      fill="var(--chart-1)"
-                      radius={[3, 3, 0, 0]}
-                      isAnimationActive={false}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="panel p-5">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="font-display text-base font-semibold text-foreground">
-                  Waktu respons
-                </h2>
-                <Badge variant="neutral">30 hari</Badge>
-              </div>
-              <div className="mt-4 h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={daily} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
-                    <defs>
-                      <linearGradient id="msFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="var(--color-border)"
-                    />
-                    <XAxis
-                      dataKey="label"
-                      fontSize={11}
-                      stroke="var(--color-text-muted)"
-                      tick={{ fill: "var(--color-text-muted)" }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      fontSize={11}
-                      stroke="var(--color-text-muted)"
-                      tick={{ fill: "var(--color-text-muted)" }}
-                    />
-                    <Tooltip
-                      formatter={(value) => {
-                        const n = typeof value === "number" ? value : undefined;
-                        return n == null
-                          ? ["Belum ada data", "rata-rata"]
-                          : [`${n} ms`, "rata-rata"];
-                      }}
-                      contentStyle={{
-                        background: "var(--color-surface)",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: 8,
-                        color: "var(--color-text)",
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="avgMs"
-                      stroke="var(--chart-2)"
-                      strokeWidth={2}
-                      fill="url(#msFill)"
-                      isAnimationActive={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold text-foreground">Pengaturan</h2>
-            <form
-              className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end"
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveSettings.mutate();
-              }}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="interval">Interval (menit)</Label>
-                <Input
-                  id="interval"
-                  type="number"
-                  min={1}
-                  value={intervalMinutes}
-                  onChange={(e) => setIntervalMinutes(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="threshold">Gagal sebelum down</Label>
-                <Input
-                  id="threshold"
-                  type="number"
-                  min={1}
-                  value={failThreshold}
-                  onChange={(e) => setFailThreshold(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="keyword">Keyword (opsional)</Label>
-                <Input
-                  id="keyword"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  placeholder="Login"
-                />
-              </div>
-              <div className="flex items-center gap-2 sm:col-span-2">
-                <Switch id="ssl" checked={checkSsl} onCheckedChange={setCheckSsl} />
-                <Label htmlFor="ssl" className="cursor-pointer">
-                  Cek sertifikat SSL
-                </Label>
-              </div>
-              <Button type="submit" disabled={saveSettings.isPending}>
-                {saveSettings.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Save className="h-4 w-4" aria-hidden="true" />
-                )}
-                Simpan
-              </Button>
-            </form>
-          </section>
-
-          <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold text-foreground">
-              Integrasi APM & error tracking
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Gunakan API key ini di SDK WebWatch untuk mengirim log dan error dari aplikasimu.
-            </p>
-
-            <div className="mt-4 space-y-4">
-              {apiKeys.isPending ? (
-                <Skeleton className="h-20 w-full rounded-lg" />
-              ) : apiKeys.isError ? (
-                <ErrorState
-                  className="min-h-[160px]"
-                  title="API key gagal dimuat"
-                  description="Daftar API key tidak bisa diambil dari server."
-                  onRetry={() => void apiKeys.refetch()}
-                />
-              ) : keys.length === 0 ? (
-                <EmptyState
-                  className="min-h-[160px]"
-                  icon={KeyRound}
-                  title="Belum ada API key"
-                  description="Buat API key untuk mulai mengirim log error dari aplikasi kamu."
-                />
-              ) : (
+            <div className="p-5">
+              {detailIsPending ? (
                 <ul className="space-y-3">
-                  {keys.map((k) => (
-                    <li
-                      key={k.key}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{k.name}</p>
-                        <p className="mt-1 select-all break-all font-mono text-xs text-muted-foreground">
-                          {k.key}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <time
-                          className="text-xs text-muted-foreground tabular-nums"
-                          dateTime={k.created_at}
-                        >
-                          {new Date(k.created_at).toLocaleDateString("id-ID")}
-                        </time>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Cara pasang
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl">
-                            <DialogHeader>
-                              <DialogTitle>Cara memasang SDK</DialogTitle>
-                              <DialogDescription>
-                                API key <span className="font-mono">{k.name}</span>. Ganti contoh
-                                domain dan key di bawah dengan milikmu.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-5 py-2">
-                              <div>
-                                <h3 className="mb-2 text-sm font-semibold text-foreground">
-                                  1. Frontend (browser / React / Vue / HTML)
-                                </h3>
-                                <p className="mb-2 text-xs text-muted-foreground">
-                                  Letakkan di dalam tag <code>&lt;head&gt;</code> pada file
-                                  index.html aplikasimu.
-                                </p>
-                                <CodeBlock
-                                  file="index.html"
-                                  code={`<script type="module">
-  import { WebWatch } from "${origin}/api/public/sdk";
-
-  WebWatch.init("${k.key}", "${origin}/api/ingest");
-</script>`}
-                                />
-                              </div>
-                              <div>
-                                <h3 className="mb-2 text-sm font-semibold text-foreground">
-                                  2. Backend (Node.js / Express)
-                                </h3>
-                                <p className="mb-2 text-xs text-muted-foreground">
-                                  Letakkan paling bawah sebelum <code>app.listen</code>.
-                                </p>
-                                <CodeBlock
-                                  file="server.js"
-                                  code={`import { WebWatch } from "${origin}/api/public/sdk";
-
-WebWatch.init("${k.key}", "${origin}/api/ingest");
-
-app.use(WebWatch.expressErrorHandler());`}
-                                />
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <li key={i}>
+                      <Skeleton className="h-24 rounded-lg" />
                     </li>
                   ))}
                 </ul>
-              )}
-
-              <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" /> Buat API key baru
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Buat API key baru</DialogTitle>
-                    <DialogDescription>
-                      Beri nama agar mudah dikenali, misalnya &ldquo;frontend produksi&rdquo;.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form
-                    className="space-y-4"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const name = keyName.trim();
-                      if (!name) return;
-                      createApiKey.mutate(name);
-                    }}
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="key-name">Nama API key</Label>
-                      <Input
-                        id="key-name"
-                        value={keyName}
-                        onChange={(e) => setKeyName(e.target.value)}
-                        placeholder="Frontend produksi"
-                        required
-                      />
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit" disabled={createApiKey.isPending || !keyName.trim()}>
-                        {createApiKey.isPending && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                        )}
-                        Buat key
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </section>
-
-          <section className="panel p-5">
-            <h2 className="font-display text-base font-semibold text-foreground">Log APM</h2>
-            <div className="mt-4">
-              {apmEvents.isPending ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-20 rounded-lg" />
-                  ))}
-                </div>
-              ) : apmEvents.isError ? (
+              ) : detailIsError ? (
                 <ErrorState
                   className="min-h-[160px]"
-                  title="Log APM gagal dimuat"
-                  description="Data exception tidak bisa diambil dari server."
-                  onRetry={() => void apmEvents.refetch()}
+                  title="Detail situs gagal dimuat"
+                  description="Data situs tidak bisa diambil dari server."
+                  onRetry={() => void refetchDetail()}
                 />
               ) : events.length === 0 ? (
                 <EmptyState
                   className="min-h-[160px]"
-                  icon={History}
+                  icon={Activity}
+                  title="Belum ada error tercatat"
+                  description="Belum ada exception yang masuk dari SDK WebWatch pada situs ini."
+                />
+              ) : (
+                <ul className="space-y-3">
+                  {events.slice(0, 10).map((ev) => (
+                    <li key={ev.id} className="rounded-lg border border-border bg-surface p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={isErrorEvent(ev.event_type) ? "danger" : "info"}
+                            className="font-mono text-[10px]"
+                          >
+                            {ev.event_type}
+                          </Badge>
+                          <Badge variant="neutral" className="font-mono text-[10px]">
+                            {ev.environment}
+                          </Badge>
+                        </div>
+                        <time
+                          className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+                          dateTime={ev.created_at}
+                        >
+                          {formatRelativeTime(ev.created_at)}
+                        </time>
+                      </div>
+                      <p className="mt-2 text-sm font-medium text-foreground">{ev.message}</p>
+                      {(ev.method || ev.url) && (
+                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                          {[ev.method, ev.url].filter(Boolean).join(" ")}
+                        </p>
+                      )}
+                      {ev.stack_trace && (
+                        <details className="mt-3 group">
+                          <summary className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <ChevronDown
+                              className="h-3 w-3 transition-transform group-open:rotate-180"
+                              aria-hidden="true"
+                            />
+                            Tampilkan stack trace
+                          </summary>
+                          <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+                            {ev.stack_trace}
+                          </pre>
+                        </details>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── APM ── */}
+        <TabsContent value="apm">
+          <div className="panel overflow-hidden">
+            <SectionHeader
+              icon={Activity}
+              title="Semua Log APM & Error"
+              trailing={
+                <div className="flex items-center gap-2">
+                  <RefreshButton onClick={() => refetchDetail()} disabled={detailIsFetching} />
+                  <Badge variant="neutral">{events.length} event</Badge>
+                </div>
+              }
+            />
+            <div className="p-5">
+              {detailIsPending ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-24 rounded-lg" />
+                  ))}
+                </div>
+              ) : detailIsError ? (
+                <ErrorState
+                  className="min-h-[160px]"
+                  title="Log APM gagal dimuat"
+                  description="Data exception tidak bisa diambil dari server."
+                  onRetry={() => void refetchDetail()}
+                />
+              ) : events.length === 0 ? (
+                <EmptyState
+                  className="min-h-[160px]"
+                  icon={Activity}
                   title="Belum ada error tercatat"
                   description="Belum ada exception yang masuk dari SDK WebWatch pada situs ini."
                 />
               ) : (
                 <ul className="space-y-3">
                   {events.map((ev) => (
-                    <li
-                      key={ev.id}
-                      className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                    <li key={ev.id} className="rounded-lg border border-border bg-surface p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={isErrorEvent(ev.event_type) ? "danger" : "info"}>
+                          <Badge
+                            variant={isErrorEvent(ev.event_type) ? "danger" : "info"}
+                            className="font-mono text-[10px]"
+                          >
                             {ev.event_type}
                           </Badge>
-                          <Badge variant="neutral">{ev.environment}</Badge>
+                          <Badge variant="neutral" className="font-mono text-[10px]">
+                            {ev.environment}
+                          </Badge>
                         </div>
                         <time
-                          className="text-xs text-muted-foreground tabular-nums"
+                          className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
                           dateTime={ev.created_at}
                         >
-                          {formatDateTime(ev.created_at)}
+                          {formatRelativeTime(ev.created_at)}
                         </time>
                       </div>
-                      <p className="text-sm font-medium text-foreground">{ev.message}</p>
+                      <p className="mt-2 text-sm font-medium text-foreground">{ev.message}</p>
                       {(ev.method || ev.url) && (
-                        <p className="break-all font-mono text-xs text-muted-foreground">
+                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                           {[ev.method, ev.url].filter(Boolean).join(" ")}
                         </p>
                       )}
                       {ev.stack_trace && (
-                        <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-                          {ev.stack_trace}
-                        </pre>
+                        <details className="mt-3 group">
+                          <summary className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <ChevronDown
+                              className="h-3 w-3 transition-transform group-open:rotate-180"
+                              aria-hidden="true"
+                            />
+                            Tampilkan stack trace
+                          </summary>
+                          <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+                            {ev.stack_trace}
+                          </pre>
+                        </details>
                       )}
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-          </section>
+          </div>
+        </TabsContent>
 
-          <section className="panel p-5">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="font-display text-base font-semibold text-foreground">Insiden</h2>
-              <Badge variant="neutral">{incidents.length} total</Badge>
-            </div>
-            <div className="mt-4">
-              {incidents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada insiden tercatat.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {incidents.map((incident) => (
-                    <li
-                      key={incident.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3.5 py-3"
+        {/* ── SETTINGS ── */}
+        <TabsContent value="settings">
+          <div className="panel overflow-hidden">
+            <SectionHeader icon={Settings} title="Pengaturan Situs" />
+            <form
+              className="p-5 space-y-6"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveSettings.mutate();
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="site-name">Nama Situs</Label>
+                <Input
+                  id="site-name"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder="misal: Website Produksi"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-4 border-t border-border">
+                <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
+                <div className="space-y-0.5">
+                  <Label htmlFor="active" className="font-medium cursor-pointer">
+                    Aktifkan Ingest Error
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Nonaktifkan untuk menghentikan penerimaan log error dari SDK tanpa menghapus
+                    situs.
+                  </p>
+                </div>
+              </div>
+
+              {site.verification_status === "pending" && site.verification_token && (
+                <div className="space-y-2 pt-4 border-t border-border bg-warning-surface/50 rounded-lg p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-warning">Domain Belum Terverifikasi</p>
+                      <p className="text-xs text-muted-foreground">
+                        Verifikasi domain untuk mulai menerima log error.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => verifySite.mutate()}
+                      disabled={verifySite.isPending}
                     >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <Badge variant={incident.resolved_at ? "success" : "danger"}>
-                          {incident.resolved_at ? "Selesai" : "Berlangsung"}
-                        </Badge>
-                        <time
-                          className="text-xs text-foreground tabular-nums"
-                          dateTime={incident.started_at}
-                        >
-                          {formatDateTime(incident.started_at)}
-                        </time>
-                      </div>
-                      <div className="text-xs text-muted-foreground tabular-nums">
-                        {incident.resolved_at
-                          ? `berlangsung ${duration(
-                              new Date(incident.resolved_at).getTime() -
-                                new Date(incident.started_at).getTime(),
-                            )}`
-                          : "masih berlangsung"}
-                      </div>
-                      {incident.error_message && (
-                        <p className="w-full truncate text-xs text-muted-foreground">
-                          {incident.error_message}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                      {verifySite.isPending ? "Memverifikasi..." : "Verifikasi Domain"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Token verifikasi:{" "}
+                    <code className="font-mono bg-muted px-1 rounded">
+                      {site.verification_token}
+                    </code>
+                  </p>
+                </div>
               )}
-            </div>
-          </section>
 
-          <section className="panel p-5">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="font-display text-base font-semibold text-foreground">
-                Riwayat pengecekan
-              </h2>
-              <Badge variant="neutral">50 terakhir</Badge>
+              <div className="flex justify-end gap-2 pt-4 border-t border-border">
+                <Button type="button" variant="outline" onClick={() => setSettingsOpen(false)}>
+                  Batal
+                </Button>
+                <Button type="submit" disabled={saveSettings.isPending}>
+                  {saveSettings.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Simpan Perubahan
+                </Button>
+              </div>
+            </form>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── API Keys & APM Integration ── */}
+      <section className="panel overflow-hidden">
+        <SectionHeader
+          icon={KeyRound}
+          title="API Keys & Integrasi APM"
+          trailing={
+            <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-7 px-2 text-xs gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                  Buat Key Baru
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Buat API Key Baru</DialogTitle>
+                  <DialogDescription>
+                    Beri nama agar mudah dikenali, misalnya "frontend produksi".
+                  </DialogDescription>
+                </DialogHeader>
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const name = keyName.trim();
+                    if (!name) return;
+                    createApiKey.mutate(name);
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="key-name">Nama API Key</Label>
+                    <Input
+                      id="key-name"
+                      value={keyName}
+                      onChange={(e) => setKeyName(e.target.value)}
+                      placeholder="Frontend produksi"
+                      required
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" disabled={createApiKey.isPending || !keyName.trim()}>
+                      {createApiKey.isPending && (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      )}
+                      Buat Key
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          }
+        />
+
+        <div className="p-5">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Gunakan API key ini di SDK WebWatch untuk mengirim log dan error dari aplikasimu.
+          </p>
+
+          {apiKeys.isPending ? (
+            <Skeleton className="h-20 w-full rounded-lg" />
+          ) : apiKeys.isError ? (
+            <ErrorState
+              className="min-h-[160px]"
+              title="API Key gagal dimuat"
+              description="Daftar API key tidak bisa diambil dari server."
+              onRetry={() => void apiKeys.refetch()}
+            />
+          ) : keys.length === 0 ? (
+            <EmptyState
+              className="min-h-[160px]"
+              icon={KeyRound}
+              title="Belum ada API Key"
+              description="Buat API key untuk mulai mengirim log error dari aplikasi kamu."
+              action={
+                <Button asChild>
+                  <DialogTrigger asChild>
+                    <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+                      <Button size="sm">
+                        <KeyRound className="h-3.5 w-3.5" /> Buat Key Pertama
+                      </Button>
+                    </Dialog>
+                  </DialogTrigger>
+                </Button>
+              }
+            />
+          ) : (
+            <ul className="space-y-3">
+              {keys.map((k) => (
+                <li
+                  key={k.key}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-border bg-surface p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground truncate">{k.name}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <code className="select-all break-all font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        {k.key}
+                      </code>
+                      <CopyButton value={k.key} label="Key" />
+                      <time
+                        className="text-xs text-muted-foreground tabular-nums"
+                        dateTime={k.created_at}
+                      >
+                        {new Date(k.created_at).toLocaleDateString("id-ID")}
+                      </time>
+                    </div>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Cara Pasang
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>Cara Memasang SDK</DialogTitle>
+                        <DialogDescription>
+                          API key <span className="font-mono">{k.name}</span>. Ganti contoh domain
+                          dan key di bawah dengan milikmu.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-5 py-2">
+                        <div>
+                          <h3 className="mb-2 text-sm font-semibold text-foreground">
+                            1. Frontend (Browser / React / Vue / HTML)
+                          </h3>
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            Letakkan di dalam tag{" "}
+                            <code className="rounded bg-muted px-1">{"<head>"}</code> pada file
+                            index.html aplikasimu.
+                          </p>
+                          <CodeBlock
+                            file="index.html"
+                            code={`<script type="module">
+  import { WebWatch } from "${origin}/api/public/sdk";
+
+  WebWatch.init("${k.key}", "${origin}/api/ingest");
+</script>`}
+                          />
+                        </div>
+                        <div>
+                          <h3 className="mb-2 text-sm font-semibold text-foreground">
+                            2. Backend (Node.js / Express)
+                          </h3>
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            Letakkan paling bawah sebelum{" "}
+                            <code className="rounded bg-muted px-1">app.listen</code>.
+                          </p>
+                          <CodeBlock
+                            file="server.js"
+                            code={`import { WebWatch } from "${origin}/api/public/sdk";
+
+WebWatch.init("${k.key}", "${origin}/api/ingest");
+
+app.use(WebWatch.expressErrorHandler());`}
+                          />
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* ── Settings Dialog ── */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Pengaturan Situs</DialogTitle>
+            <DialogDescription>
+              Konfigurasi nama, status aktif, dan verifikasi domain untuk situs ini.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4 py-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveSettings.mutate();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="site-name-dialog">Nama Situs</Label>
+              <Input
+                id="site-name-dialog"
+                value={siteName}
+                onChange={(e) => setSiteName(e.target.value)}
+                placeholder="misal: Website Produksi"
+              />
             </div>
-            <div className="mt-4">
-              {recentLog.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada pengecekan.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Hasil</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Respons</TableHead>
-                      <TableHead>Keterangan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentLog.map((check) => (
-                      <TableRow key={check.id}>
-                        <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                          <time dateTime={check.checked_at}>
-                            {formatDateTime(check.checked_at)}
-                          </time>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={check.is_up ? "success" : "danger"}>
-                            {check.is_up ? "Berhasil" : "Gagal"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {check.status_code ?? "Tidak ada"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {check.response_time_ms != null
-                            ? `${check.response_time_ms} ms`
-                            : "Tidak ada"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {check.error_message ?? "Tidak ada"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+
+            <div className="flex items-center gap-3">
+              <Switch id="active-dialog" checked={isActive} onCheckedChange={setIsActive} />
+              <Label htmlFor="active-dialog" className="cursor-pointer">
+                Aktifkan Ingest Error
+              </Label>
             </div>
-          </section>
-        </>
-      )}
+
+            {site.verification_status === "pending" && site.verification_token && (
+              <div className="space-y-2 pt-4 border-t border-border bg-warning-surface/50 rounded-lg p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-warning">Domain Belum Terverifikasi</p>
+                    <p className="text-xs text-muted-foreground">
+                      Verifikasi domain untuk mulai menerima log error.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => verifySite.mutate()}
+                    disabled={verifySite.isPending}
+                  >
+                    {verifySite.isPending ? "Memverifikasi..." : "Verifikasi Domain"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Token verifikasi:{" "}
+                  <code className="font-mono bg-muted px-1 rounded">{site.verification_token}</code>
+                </p>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSettingsOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={saveSettings.isPending}>
+                {saveSettings.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Simpan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

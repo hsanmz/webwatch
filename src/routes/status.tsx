@@ -30,14 +30,12 @@ type StatusResponse = {
   metrics: {
     totalSites: number;
     apmEvents24h: number;
-    checks24h: number;
   };
   error?: string;
 };
 
 const METRICS: { key: keyof StatusResponse["metrics"]; label: string; hint: string }[] = [
-  { key: "totalSites", label: "Situs dipantau", hint: "total situs terdaftar" },
-  { key: "checks24h", label: "Pengecekan dijalankan", hint: "dalam 24 jam terakhir" },
+  { key: "totalSites", label: "Situs terdaftar", hint: "total situs terdaftar" },
   { key: "apmEvents24h", label: "Event APM diterima", hint: "dalam 24 jam terakhir" },
 ];
 
@@ -57,13 +55,17 @@ function StatusPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-content items-center justify-between gap-4 px-4 sm:px-6">
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-content items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" aria-label="WebWatch, beranda">
             <BrandLockup className="h-7 w-auto" />
           </Link>
-          <nav className="flex items-center gap-5 text-sm text-muted-foreground">
-            <Link to="/docs" className="transition-colors hover:text-foreground">
+          <nav className="flex items-center gap-4 text-sm">
+            <Link
+              to="/docs"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
               Dokumentasi
             </Link>
             <Button asChild size="sm" variant="outline">
@@ -74,23 +76,31 @@ function StatusPage() {
       </header>
 
       <main className="mx-auto w-full max-w-content flex-1 px-4 py-12 sm:px-6">
+        {/* ── Page title ──────────────────────────────────────────── */}
+        <div className="mb-5 flex items-center gap-2">
+          <span className="h-1 w-5 rounded-full bg-primary" aria-hidden="true" />
+          <span className="font-mono text-xs font-medium text-primary">Status</span>
+        </div>
         <div className="max-w-2xl">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Status sistem WebWatch
           </h1>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-            Halaman ini menampilkan kondisi edge, ingestion, dan cron yang dipakai untuk memantau
-            situs kamu. Data diambil ulang tiap menit.
+            Kondisi API, ingestion, dan database yang dipakai untuk menerima log error aplikasi
+            kamu. Data diperbarui tiap menit.
           </p>
         </div>
 
+        {/* ── Overall status banner ────────────────────────────────── */}
         <section
           aria-live="polite"
           className="panel mt-10 flex flex-wrap items-center justify-between gap-4 p-6"
         >
           <div>
-            <p className="text-xs font-medium text-muted-foreground">Status keseluruhan</p>
-            <p className="mt-1 font-display text-2xl font-bold text-foreground">{overall.label}</p>
+            <p className="font-mono text-xs text-muted-foreground">Status keseluruhan</p>
+            <p className="mt-1.5 font-display text-2xl font-bold text-foreground">
+              {overall.label}
+            </p>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {data?.error ?? "Tidak ada gangguan yang dilaporkan pada layanan kami."}
             </p>
@@ -101,7 +111,7 @@ function StatusPage() {
         {isPending ? (
           <div className="mt-8 space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+              <Skeleton key={i} className="h-20 w-full rounded-lg" />
             ))}
           </div>
         ) : isError ? (
@@ -113,43 +123,47 @@ function StatusPage() {
           />
         ) : (
           <>
+            {/* ── Components ────────────────────────────────────────── */}
             <section className="mt-12">
-              <div className="flex items-center gap-2">
-                <Server className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                <h2 className="font-display text-lg font-semibold text-foreground">
+              <div className="mb-4 flex items-center gap-2">
+                <Server className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <h2 className="font-display text-base font-semibold text-foreground">
                   Komponen layanan
                 </h2>
               </div>
-              <ul className="mt-4 divide-y divide-border border-y border-border">
-                {components.map((component) => (
-                  <li
-                    key={component.name}
-                    className="flex flex-wrap items-center justify-between gap-4 py-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{component.name}</p>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        {component.description}
-                      </p>
-                    </div>
-                    <SystemStatusBadge status={component.status} />
-                  </li>
-                ))}
-              </ul>
+              <div className="panel overflow-hidden">
+                <ul className="divide-y divide-border">
+                  {components.map((component) => (
+                    <li
+                      key={component.name}
+                      className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{component.name}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {component.description}
+                        </p>
+                      </div>
+                      <SystemStatusBadge status={component.status} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </section>
 
+            {/* ── Platform metrics ──────────────────────────────────── */}
             <section className="mt-12">
-              <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                <h2 className="font-display text-lg font-semibold text-foreground">
+              <div className="mb-4 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <h2 className="font-display text-base font-semibold text-foreground">
                   Skala platform
                 </h2>
               </div>
-              <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+              <dl className="grid gap-4 sm:grid-cols-2">
                 {METRICS.map((metric) => (
                   <div key={metric.key} className="panel p-5">
-                    <dt className="text-xs font-medium text-muted-foreground">{metric.label}</dt>
-                    <dd className="mt-1 font-display text-3xl font-bold tabular-nums text-foreground">
+                    <dt className="font-mono text-xs text-muted-foreground">{metric.label}</dt>
+                    <dd className="mt-2 font-display text-3xl font-bold tabular-nums text-foreground">
                       {(data?.metrics[metric.key] ?? 0).toLocaleString("id-ID")}
                     </dd>
                     <p className="mt-1.5 text-xs text-muted-foreground">{metric.hint}</p>
@@ -158,20 +172,20 @@ function StatusPage() {
               </dl>
             </section>
 
+            {/* ── CTA ───────────────────────────────────────────────── */}
             <section className="panel mt-12 flex flex-wrap items-center justify-between gap-4 p-6">
               <div>
-                <h2 className="font-display text-lg font-semibold text-foreground">
-                  Pantau situsmu sendiri
+                <h2 className="font-display text-base font-semibold text-foreground">
+                  Pantau error aplikasimu
                 </h2>
                 <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-                  WebWatch mengirim alert ke Telegram saat status situs berubah, jadi kamu tidak
-                  perlu membuka halaman ini untuk tahu.
+                  WebWatch mengirim alert ke Telegram saat error terjadi di aplikasi kamu.
                 </p>
               </div>
               <Button asChild>
                 <Link to="/auth">
                   Mulai pantau
-                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>
             </section>
@@ -179,6 +193,7 @@ function StatusPage() {
         )}
       </main>
 
+      {/* ── Footer ──────────────────────────────────────────────────── */}
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-3 px-4 py-8 text-sm text-muted-foreground sm:px-6">
           <p>© 2026 WebWatch</p>

@@ -34,44 +34,44 @@ out of scope.
 The raw palette is expressed in OKLCH so the lightness and chroma relationships survive a
 future dark theme. Raw entries are never used directly in components.
 
-| Group | Tokens | Role |
-| --- | --- | --- |
-| Brand | `--brand-950`, `--brand-900`, `--brand-800`, `--brand-700`, `--brand-600`, `--brand-500`, `--brand-100` | Product teal. The only accent in the system. |
-| Secondary teal | `--teal-700`, `--teal-600`, `--teal-100` | Focus ring, secondary chart series. |
-| Neutrals | `--neutral-0` .. `--neutral-900` | Canvas, surfaces, text, borders. |
-| Status | `--success-700/100`, `--warning-700/100`, `--danger-700/100`, `--info-700/100` | Operational states and their tinted surfaces. |
+| Group          | Tokens                                                                                                  | Role                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Brand          | `--brand-950`, `--brand-900`, `--brand-800`, `--brand-700`, `--brand-600`, `--brand-500`, `--brand-100` | Product teal. The only accent in the system.  |
+| Secondary teal | `--teal-700`, `--teal-600`, `--teal-100`                                                                | Focus ring, secondary chart series.           |
+| Neutrals       | `--neutral-0` .. `--neutral-900`                                                                        | Canvas, surfaces, text, borders.              |
+| Status         | `--success-700/100`, `--warning-700/100`, `--danger-700/100`, `--info-700/100`                          | Operational states and their tinted surfaces. |
 
 ### 2.2 Semantic roles
 
 Components read semantic roles only. These are the variables a component is allowed to use.
 
-| Role | Maps to | Utility |
-| --- | --- | --- |
-| `--color-bg` | `--neutral-50` | `bg-background` |
-| `--color-surface` | `--neutral-0` | `bg-card` |
-| `--color-surface-muted` | `--neutral-100` | `bg-muted` |
-| `--color-text` | `--neutral-900` | `text-foreground` |
-| `--color-text-muted` | darkened `--neutral-500` | `text-muted-foreground` |
-| `--color-text-subtle` | `--neutral-600` | `text-neutral-600` (the role variable is also read directly by charts and code blocks) |
-| `--color-border` | `--neutral-200` | `border-border` |
-| `--color-border-strong` | `--neutral-300` | `border-input` |
-| `--color-primary` | `--brand-800` | `bg-primary`, `text-primary` |
-| `--color-primary-hover` | `--brand-900` | `bg-primary-hover` |
-| `--color-primary-subtle` | `--brand-100` | `bg-primary-subtle` |
-| `--color-focus` | `--teal-700` | focus outline |
-| `--color-success` / `--color-success-surface` | `--success-700` / `--success-100` | `text-success`, `bg-success-surface` |
-| `--color-warning` / `--color-warning-surface` | darkened `--warning-700` / `--warning-100` | `text-warning`, `bg-warning-surface` |
-| `--color-danger` / `--color-danger-surface` | `--danger-700` / `--danger-100` | `text-danger`, `bg-danger-surface` |
-| `--color-info` / `--color-info-surface` | `--info-700` / `--info-100` | `text-info`, `bg-info-surface` |
+| Role                                          | Maps to                                    | Utility                                                                                |
+| --------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `--color-bg`                                  | `--neutral-50`                             | `bg-background`                                                                        |
+| `--color-surface`                             | `--neutral-0`                              | `bg-card`                                                                              |
+| `--color-surface-muted`                       | `--neutral-100`                            | `bg-muted`                                                                             |
+| `--color-text`                                | `--neutral-900`                            | `text-foreground`                                                                      |
+| `--color-text-muted`                          | darkened `--neutral-500`                   | `text-muted-foreground`                                                                |
+| `--color-text-subtle`                         | `--neutral-600`                            | `text-neutral-600` (the role variable is also read directly by charts and code blocks) |
+| `--color-border`                              | `--neutral-200`                            | `border-border`                                                                        |
+| `--color-border-strong`                       | `--neutral-300`                            | `border-input`                                                                         |
+| `--color-primary`                             | `--brand-800`                              | `bg-primary`, `text-primary`                                                           |
+| `--color-primary-hover`                       | `--brand-900`                              | `bg-primary-hover`                                                                     |
+| `--color-primary-subtle`                      | `--brand-100`                              | `bg-primary-subtle`                                                                    |
+| `--color-focus`                               | `--teal-700`                               | focus outline                                                                          |
+| `--color-success` / `--color-success-surface` | `--success-700` / `--success-100`          | `text-success`, `bg-success-surface`                                                   |
+| `--color-warning` / `--color-warning-surface` | darkened `--warning-700` / `--warning-100` | `text-warning`, `bg-warning-surface`                                                   |
+| `--color-danger` / `--color-danger-surface`   | `--danger-700` / `--danger-100`            | `text-danger`, `bg-danger-surface`                                                     |
+| `--color-info` / `--color-info-surface`       | `--info-700` / `--info-100`                | `text-info`, `bg-info-surface`                                                         |
 
 ### 2.3 Monitoring status roles
 
-| Role | Token | Meaning |
-| --- | --- | --- |
-| `--up` | `--success-700` | The check succeeded. |
-| `--down` | `--danger-700` | The check failed. |
-| `--degraded` | `--color-warning` | Reachable but slower than expected. |
-| `--paused` | `--color-text-muted` | Monitoring is paused. Neutral, because a paused monitor is not a fault. |
+| Role         | Token                | Meaning                                                                 |
+| ------------ | -------------------- | ----------------------------------------------------------------------- |
+| `--up`       | `--success-700`      | The check succeeded.                                                    |
+| `--down`     | `--danger-700`       | The check failed.                                                       |
+| `--degraded` | `--color-warning`    | Reachable but slower than expected.                                     |
+| `--paused`   | `--color-text-muted` | Monitoring is paused. Neutral, because a paused monitor is not a fault. |
 
 ### 2.4 Data visualisation roles
 
@@ -93,22 +93,22 @@ They are aliases of the semantic roles above, never a second palette.
 
 ### 2.7 Documented deviations
 
-| Deviation | Reason |
-| --- | --- |
-| `--primary` is `--brand-800`, not `--brand-700` | White on brand-700 measures 4.50:1, exactly on the AA line. The solid action colour steps one level darker for headroom (6.45:1). Brand-700 stays available for large text, borders and graphics. |
-| `--color-text-muted` is `--neutral-500` darkened one step (`#5C6C85`) | Muted text has to pass AA on `--neutral-100` surfaces as well as on white. |
-| `--color-warning` is `--warning-700` darkened one step (`#96600A`) | Same reason: warning-700 on warning-100 measures 4.42:1. |
-| `--paused` is neutral, not amber | Paused means "not being monitored", which is not a fault. Amber is reserved for degraded and expiring SSL. |
+| Deviation                                                             | Reason                                                                                                                                                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--primary` is `--brand-800`, not `--brand-700`                       | White on brand-700 measures 4.50:1, exactly on the AA line. The solid action colour steps one level darker for headroom (6.45:1). Brand-700 stays available for large text, borders and graphics. |
+| `--color-text-muted` is `--neutral-500` darkened one step (`#5C6C85`) | Muted text has to pass AA on `--neutral-100` surfaces as well as on white.                                                                                                                        |
+| `--color-warning` is `--warning-700` darkened one step (`#96600A`)    | Same reason: warning-700 on warning-100 measures 4.42:1.                                                                                                                                          |
+| `--paused` is neutral, not amber                                      | Paused means "not being monitored", which is not a fault. Amber is reserved for degraded and expiring SSL.                                                                                        |
 
 ---
 
 ## 3. Typography
 
-| Token | Family | Use |
-| --- | --- | --- |
-| `--font-sans` | Inter | Body copy, tables, form controls. |
+| Token            | Family        | Use                                                |
+| ---------------- | ------------- | -------------------------------------------------- |
+| `--font-sans`    | Inter         | Body copy, tables, form controls.                  |
 | `--font-display` | Space Grotesk | Headings (`h1` to `h4` are set in the base layer). |
-| `--font-mono` | IBM Plex Mono | Code, identifiers, timestamps, metrics. |
+| `--font-mono`    | IBM Plex Mono | Code, identifiers, timestamps, metrics.            |
 
 - Body copy is `--font-sans` at 16 px with a 1.55 line height.
 - Monospace is reserved for content that is literally machine text: code, API keys, event
@@ -132,11 +132,11 @@ pill-shaped.
 Only three shadows exist: `--shadow-sm`, `--shadow-md`, `--shadow-lg`. The `panel` utility uses
 `--shadow-sm`. Dense screens separate regions with a border, not a shadow.
 
-| Token | Applied to | Reason |
-| --- | --- | --- |
-| `--shadow-sm` | `panel` surfaces, the `outline` toggle | The lightest separation. It says "this sits on the canvas" without lifting the surface off the page. |
-| `--shadow-md` | Popovers, hover cards, select and dropdown panels | A floating panel needs to detach from the page behind it. |
-| `--shadow-lg` | Dialogs, sheets, context menus, toasts | A modal is a separate layer. It gets the strongest elevation so the dimmed backdrop never competes with it. |
+| Token         | Applied to                                        | Reason                                                                                                      |
+| ------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `--shadow-sm` | `panel` surfaces, the `outline` toggle            | The lightest separation. It says "this sits on the canvas" without lifting the surface off the page.        |
+| `--shadow-md` | Popovers, hover cards, select and dropdown panels | A floating panel needs to detach from the page behind it.                                                   |
+| `--shadow-lg` | Dialogs, sheets, context menus, toasts            | A modal is a separate layer. It gets the strongest elevation so the dimmed backdrop never competes with it. |
 
 Nothing else carries a shadow. Cards, badges, buttons and the sidebar are flat, because a dense
 console that floats looks broken.
@@ -161,11 +161,11 @@ The `live-dot` utility is the only animation in the product. A global
 
 ## 5. Layout
 
-| Token | Value | Utility | Use |
-| --- | --- | --- | --- |
-| `--container-reading` | 45 rem | `max-w-reading` | Body copy and prose. |
-| `--container-content` | 75 rem | `max-w-content` | Default page shell. |
-| `--container-wide` | 90 rem | `max-w-wide` | Marketing pages and the docs shell. |
+| Token                 | Value  | Utility         | Use                                 |
+| --------------------- | ------ | --------------- | ----------------------------------- |
+| `--container-reading` | 45 rem | `max-w-reading` | Body copy and prose.                |
+| `--container-content` | 75 rem | `max-w-content` | Default page shell.                 |
+| `--container-wide`    | 90 rem | `max-w-wide`    | Marketing pages and the docs shell. |
 
 Breakpoints are Tailwind defaults. The only breakpoint with a structural change is `md`
 (768 px), where the app sidebar and the documentation drawer switch between inline and
@@ -179,30 +179,30 @@ overlay.
 
 shadcn/ui primitives, restyled to tokens. They keep the shadcn API.
 
-| Primitive | Notes |
-| --- | --- |
-| `button` | Variants `default`, `secondary`, `outline`, `ghost`, `destructive`, `link`. Focus ring is global, no variant overrides it. |
-| `badge` | Variants `default`, `secondary`, `outline`, `destructive`, `success`, `warning`, `danger`, `info`, `neutral`. A badge always states a real state. |
-| `card` | Uses the `panel` surface. |
-| `input`, `textarea`, `label`, `select`, `checkbox`, `switch`, `radio-group`, `toggle`, `slider` | Same surface, radius and focus behaviour. |
-| `table` | Dense. Rows are separated by borders, numeric cells stay tabular. |
-| `alert` | Uses the status surfaces. |
-| `dialog`, `sheet`, `popover`, `dropdown-menu`, `command`, `hover-card`, `context-menu`, `menubar`, `navigation-menu`, `tooltip` | Overlay surfaces. |
-| `skeleton` | The loading state shape. |
-| `sonner` | Toasts. |
+| Primitive                                                                                                                       | Notes                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `button`                                                                                                                        | Variants `default`, `secondary`, `outline`, `ghost`, `destructive`, `link`. Focus ring is global, no variant overrides it.                        |
+| `badge`                                                                                                                         | Variants `default`, `secondary`, `outline`, `destructive`, `success`, `warning`, `danger`, `info`, `neutral`. A badge always states a real state. |
+| `card`                                                                                                                          | Uses the `panel` surface.                                                                                                                         |
+| `input`, `textarea`, `label`, `select`, `checkbox`, `switch`, `radio-group`, `toggle`, `slider`                                 | Same surface, radius and focus behaviour.                                                                                                         |
+| `table`                                                                                                                         | Dense. Rows are separated by borders, numeric cells stay tabular.                                                                                 |
+| `alert`                                                                                                                         | Uses the status surfaces.                                                                                                                         |
+| `dialog`, `sheet`, `popover`, `dropdown-menu`, `command`, `hover-card`, `context-menu`, `menubar`, `navigation-menu`, `tooltip` | Overlay surfaces.                                                                                                                                 |
+| `skeleton`                                                                                                                      | The loading state shape.                                                                                                                          |
+| `sonner`                                                                                                                        | Toasts.                                                                                                                                           |
 
 ### 6.2 App composites (`src/components/app/*`)
 
-| Component | Purpose |
-| --- | --- |
-| `BrandLockup`, `BrandMark` | The only place the brand mark is drawn. Lockup for marketing and auth, square glyph for the app sidebar. |
-| `StatusBadge` | Monitoring state of a site. |
-| `SystemStatusBadge`, `resolveSystemStatus` | Health of WebWatch itself. Same tones, different vocabulary. |
-| `resolveMonitorStatus` | Maps `status` plus `is_active` to a state key. |
-| `EmptyState` | Explains what would appear here and offers the one action that fills it. |
-| `ErrorState` | Explains the failure and offers a retry. |
-| `CodeBlock` | Token-based syntax highlighting for snippets. |
-| `PageHeader`, `StatCard`, `SiteCard`, `AppShell`, `AppSidebar`, `ProfileDropdown` | Screen furniture. |
+| Component                                                                         | Purpose                                                                                                  |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `BrandLockup`, `BrandMark`                                                        | The only place the brand mark is drawn. Lockup for marketing and auth, square glyph for the app sidebar. |
+| `StatusBadge`                                                                     | Monitoring state of a site.                                                                              |
+| `SystemStatusBadge`, `resolveSystemStatus`                                        | Health of WebWatch itself. Same tones, different vocabulary.                                             |
+| `resolveMonitorStatus`                                                            | Maps `status` plus `is_active` to a state key.                                                           |
+| `EmptyState`                                                                      | Explains what would appear here and offers the one action that fills it.                                 |
+| `ErrorState`                                                                      | Explains the failure and offers a retry.                                                                 |
+| `CodeBlock`                                                                       | Token-based syntax highlighting for snippets.                                                            |
+| `PageHeader`, `StatCard`, `SiteCard`, `AppShell`, `AppSidebar`, `ProfileDropdown` | Screen furniture.                                                                                        |
 
 ### 6.3 Marketing composites (`src/components/marketing/*`)
 
@@ -235,14 +235,14 @@ The state is always spelled out in words. Colour reinforces the word, it never c
 The same wording is used on the dashboard, on the site detail page and on the public status
 page.
 
-| State | Label | Tone |
-| --- | --- | --- |
-| `up` | Operasional | success |
-| `degraded` | Terlambat | warning |
-| `down` | Tidak Tersedia | danger |
-| `unknown` | Belum Dicek | neutral |
-| unrecognised value | Tidak Diketahui | neutral |
-| paused (`is_active = false`) | Dijeda | neutral |
+| State                        | Label           | Tone    |
+| ---------------------------- | --------------- | ------- |
+| `up`                         | Operasional     | success |
+| `degraded`                   | Terlambat       | warning |
+| `down`                       | Tidak Tersedia  | danger  |
+| `unknown`                    | Belum Dicek     | neutral |
+| unrecognised value           | Tidak Diketahui | neutral |
+| paused (`is_active = false`) | Dijeda          | neutral |
 
 An unknown state is never green.
 
@@ -290,9 +290,9 @@ An unknown state is never green.
 
 ## 10. Assets
 
-| File | Use |
-| --- | --- |
-| `public/logo.png` | Wide lockup. Landing page, auth screen, marketing. |
-| `public/favicon.png` | Square "W" glyph. App sidebar, browser icon. |
+| File                 | Use                                                |
+| -------------------- | -------------------------------------------------- |
+| `public/logo.png`    | Wide lockup. Landing page, auth screen, marketing. |
+| `public/favicon.png` | Square "W" glyph. App sidebar, browser icon.       |
 
 Filenames are part of the existing public contract and are not changed.

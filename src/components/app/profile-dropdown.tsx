@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronsUpDown, LogOut, MessageCircle } from "lucide-react";
+import { ChevronsUpDown, LogOut, MessageCircle, Settings } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -44,7 +44,7 @@ export function ProfileDropdown() {
               {initials}
             </AvatarFallback>
           </Avatar>
-          <span className="hidden max-w-[180px] truncate text-sm font-medium sm:block">
+          <span className="hidden max-w-[160px] truncate text-sm font-medium sm:block">
             {email}
           </span>
           <ChevronsUpDown
@@ -54,11 +54,15 @@ export function ProfileDropdown() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
+        {/* Account info */}
         <DropdownMenuLabel className="font-normal">
-          <p className="text-xs font-medium text-muted-foreground">Akun</p>
+          <p className="font-mono text-[10px] font-medium text-muted-foreground">akun</p>
           <p className="mt-0.5 truncate text-sm font-medium">{email}</p>
         </DropdownMenuLabel>
+
         <DropdownMenuSeparator />
+
+        {/* Telegram status — read-only row */}
         <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
           <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
           <span className="text-muted-foreground">Telegram</span>
@@ -66,7 +70,16 @@ export function ProfileDropdown() {
             {connected ? "Terhubung" : "Belum terhubung"}
           </Badge>
         </div>
+
         <DropdownMenuSeparator />
+
+        {/* Settings */}
+        <DropdownMenuItem onClick={() => navigate({ to: "/settings" })} className="gap-2">
+          <Settings className="h-4 w-4" aria-hidden="true" />
+          Pengaturan
+        </DropdownMenuItem>
+
+        {/* Sign out */}
         <DropdownMenuItem
           onClick={signOut}
           className="gap-2 text-destructive focus:bg-danger-surface focus:text-destructive"

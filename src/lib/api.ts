@@ -2,14 +2,10 @@ export type ApiSite = {
   id: string;
   name: string | null;
   url: string;
-  interval_seconds: number;
-  fail_threshold: number;
-  check_keyword: string | null;
   is_active: boolean;
-  current_status: string;
-  last_checked_at: string | null;
   verification_token: string | null;
   verification_status: string;
+  created_at: string;
 };
 
 export type ApiUser = {

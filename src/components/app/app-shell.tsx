@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
 
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -10,12 +10,17 @@ import { AppSidebar } from "@/components/app/app-sidebar";
 import { ProfileDropdown } from "@/components/app/profile-dropdown";
 
 /*
- * The shell owns three things: the landmark structure, the skip link that
- * lets keyboard users jump past the navigation, and the reading width of the
- * content column. Everything inside `main` shares one container width so the
- * pages line up with each other.
+ * The shell owns three things: the landmark structure, the skip link for
+ * keyboard users, and the reading width of the content column.
+ *
+ * The topbar carries navigation utility only — the trigger, the current
+ * section label (derived from the route), the docs link, and the profile
+ * menu. No filler copy.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = useLocation({ select: (loc) => loc.pathname });
+  const sectionLabel = resolveSectionLabel(pathname);
+
   return (
     <SidebarProvider>
       <a
@@ -26,13 +31,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <AppSidebar />
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1 h-11 w-11" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <span className="text-sm font-medium text-muted-foreground">Konsol WebWatch</span>
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="flex min-w-0 items-center gap-2">
+            <SidebarTrigger className="-ml-1 h-11 w-11 text-muted-foreground hover:text-foreground" />
+            {sectionLabel && (
+              <>
+                <Separator orientation="vertical" className="mx-1 h-4" />
+                <span className="truncate text-sm font-medium text-muted-foreground">
+                  {sectionLabel}
+                </span>
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -60,4 +71,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function resolveSectionLabel(pathname: string): string | null {
+  if (pathname === "/dashboard") return "Dashboard";
+  if (pathname.startsWith("/sites/")) return "Detail Situs";
+  if (pathname === "/apm") return "Log Error (APM)";
+  if (pathname === "/docs") return "Dokumentasi";
+  if (pathname === "/settings") return "Pengaturan";
+  return null;
 }

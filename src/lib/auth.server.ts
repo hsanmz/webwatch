@@ -113,7 +113,7 @@ export function clearSessionCookie(): string {
 export async function createOtpForEmail(email: string): Promise<string> {
   const arr = new Uint32Array(1);
   globalThis.crypto.getRandomValues(arr);
-  const code = String(arr[0] % 1_000_000).padStart(6, "0");
+  const code = String((arr[0] ?? 0) % 1_000_000).padStart(6, "0");
   const hash = await sha256Hex(`${email}:${code}`);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
   const now = new Date().toISOString();

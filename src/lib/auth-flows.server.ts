@@ -31,8 +31,12 @@ function deepLinkFor(token: string): string {
 }
 
 export async function requestOtp(request: Request): Promise<Response> {
-  const reqAny = request as any;
-  const env = reqAny.runtime?.cloudflare?.env ?? reqAny.cf?.env ?? (globalThis as any).__env__;
+  const req = request as {
+    runtime?: { cloudflare?: { env?: unknown } };
+    cf?: { env?: unknown };
+  };
+  const env =
+    req.runtime?.cloudflare?.env ?? req.cf?.env ?? (globalThis as { __env__?: unknown }).__env__;
   if (env) {
     const { setAppEnv } = await import("./wrangler-env");
     setAppEnv(env);

@@ -13,6 +13,9 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
+    // Register the env-capturing nitro plugin. The shared preset narrows
+    // nitro's type (no `plugins` key), so the literal is asserted to a
+    // compatible shape to keep `tsc --noEmit` clean.
     plugins: ["server/plugins/env.ts"],
-  },
+  } as { preset?: string; plugins: string[] },
 });

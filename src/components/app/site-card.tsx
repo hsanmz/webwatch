@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Activity, AlertTriangle, Clock, Loader2, Pause, Play, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Pause, Play, Trash2 } from "lucide-react";
 import type { ApiSite } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { StatusBadge } from "@/components/app/status-badge";
+import { Badge } from "@/components/ui/badge";
 
 function hostInitial(url: string): string {
   try {
@@ -59,62 +59,79 @@ export function SiteCard({
   const needsVerification = site.verification_status === "pending";
 
   return (
-    <article className="panel flex flex-col justify-between p-5 transition-colors hover:border-border-strong">
-      <div>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={`flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-lg border font-display text-sm font-bold ${
-                needsVerification
-                  ? "border-warning/30 bg-warning-surface text-warning"
-                  : "border-border bg-muted text-muted-foreground"
-              }`}
-              aria-hidden="true"
-            >
-              {needsVerification ? <AlertTriangle className="h-4 w-4" /> : hostInitial(site.url)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate font-display text-base font-semibold text-foreground">
-                {site.name || hostLabel(site.url)}
-              </p>
-              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{site.url}</p>
-            </div>
-          </div>
-          <StatusBadge status={site.current_status} active={site.is_active} />
+    <article className="panel flex flex-col p-5 transition-colors duration-[var(--motion-fast)] hover:border-border-strong">
+      {/* ── Identity ──────────────────────────────────────────────────── */}
+      <div className="flex items-start gap-3">
+        {/* Avatar tile */}
+        <div
+          className={`flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-lg border font-display text-sm font-bold ${
+            needsVerification
+              ? "border-warning/30 bg-warning-surface text-warning"
+              : "border-border bg-muted text-muted-foreground"
+          }`}
+          aria-hidden="true"
+        >
+          {needsVerification ? <AlertTriangle className="h-4 w-4" /> : hostInitial(site.url)}
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            tiap {Math.round(site.interval_seconds / 60)} menit
-          </span>
-          <span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
-          <span className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            {site.last_checked_at
-              ? `cek ${new Date(site.last_checked_at).toLocaleTimeString("id-ID", {
-                  timeZone: "Asia/Jakarta",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })} WIB`
-              : "belum dicek"}
-          </span>
+        {/* Name + URL */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-sm font-semibold text-foreground">
+            {site.name || hostLabel(site.url)}
+          </p>
+          <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{site.url}</p>
+        </div>
+
+        {/* Status badge */}
+        <div className="shrink-0">
+          <Badge
+            variant={site.verification_status === "verified" ? "success" : "warning"}
+            className="gap-1"
+          >
+            {site.verification_status === "verified" ? "Terverifikasi" : "Pending Verifikasi"}
+          </Badge>
         </div>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+      {/* ── Meta strip ────────────────────────────────────────────────── */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          {site.is_active ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+              Aktif menerima log
+            </>
+          ) : (
+            <>
+              <span className="h-2 w-2 rounded-full bg-muted-foreground" aria-hidden="true" />
+              Dijeda
+            </>
+          )}
+        </span>
+        <span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
+        <span className="flex items-center gap-1.5">
+          Dibuat{" "}
+          {new Date(site.created_at).toLocaleDateString("id-ID", {
+            dateStyle: "medium",
+          })}
+        </span>
+      </div>
+
+      {/* ── Actions ───────────────────────────────────────────────────── */}
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
         {needsVerification ? (
           <Dialog>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline" className="border-warning/40 text-warning">
-                <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Verifikasi Domain
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                Verifikasi Domain
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Verifikasi Kepemilikan Domain</DialogTitle>
                 <DialogDescription>
-                  Untuk memantau dan mendapatkan metrik, buktikan bahwa kamu pemilik {site.url}.
+                  Agar log error diterima, buktikan bahwa kamu pemilik {site.url}.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -132,9 +149,7 @@ export function SiteCard({
                 </p>
               </div>
               <Button onClick={() => onVerify?.(site.id)} disabled={verifyPending}>
-                {verifyPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                )}
+                {verifyPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Verifikasi Sekarang
               </Button>
             </DialogContent>
@@ -142,36 +157,39 @@ export function SiteCard({
         ) : (
           <Button asChild variant="secondary" size="sm">
             <Link to="/sites/$id" params={{ id: site.id }}>
-              Lihat Metrik
+              Lihat Detail
             </Link>
           </Button>
         )}
+
+        {/* Icon actions: pause/resume + delete */}
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => onToggle(site)}
-            title={site.is_active ? "Jeda pemantauan" : "Lanjutkan pemantauan"}
+            title={site.is_active ? "Jeda ingest error" : "Lanjutkan ingest error"}
           >
             {site.is_active ? (
-              <Pause className="h-4 w-4" aria-hidden="true" />
+              <Pause className="h-3.5 w-3.5" aria-hidden="true" />
             ) : (
-              <Play className="h-4 w-4" aria-hidden="true" />
+              <Play className="h-3.5 w-3.5" aria-hidden="true" />
             )}
             <span className="sr-only">
-              {site.is_active ? "Jeda pemantauan" : "Lanjutkan pemantauan"}
+              {site.is_active ? "Jeda ingest error" : "Lanjutkan ingest error"}
             </span>
           </Button>
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-muted-foreground hover:bg-danger-surface hover:text-danger"
+                className="h-8 w-8 text-muted-foreground hover:bg-danger-surface hover:text-danger"
                 title="Hapus situs"
               >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only">Hapus situs</span>
               </Button>
             </AlertDialogTrigger>
@@ -179,7 +197,7 @@ export function SiteCard({
               <AlertDialogHeader>
                 <AlertDialogTitle>Hapus {site.name || hostLabel(site.url)}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Riwayat pengecekan, insiden, dan metrik situs ini akan hilang permanen. Tindakan
+                  Semua log error, API key, dan konfigurasi situs ini akan hilang permanen. Tindakan
                   ini tidak bisa dibatalkan.
                 </AlertDialogDescription>
               </AlertDialogHeader>

@@ -3,19 +3,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  Bell,
+  Bug,
   CheckCircle2,
   Loader2,
   MessageCircle,
   ShieldCheck,
-  Timer,
+  MessageSquare,
 } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BrandLockup } from "@/components/app/brand";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/auth")({
@@ -25,12 +24,12 @@ export const Route = createFileRoute("/auth")({
       {
         name: "description",
         content:
-          "Masuk ke WebWatch dengan kode sekali pakai lewat Telegram untuk memantau situs dan menerima alert downtime.",
+          "Masuk ke WebWatch dengan kode sekali pakai lewat Telegram untuk memantau error aplikasi dan menerima alert real-time.",
       },
       { property: "og:title", content: "Masuk - WebWatch" },
       {
         property: "og:description",
-        content: "Uptime monitoring dengan alert Telegram.",
+        content: "APM & Error Monitoring dengan alert Telegram.",
       },
     ],
   }),
@@ -38,67 +37,152 @@ export const Route = createFileRoute("/auth")({
 });
 
 const SAMPLE_ROWS = [
-  { host: "contoh-toko.id", ok: true, ms: "128 ms · 200 OK" },
-  { host: "contoh-api.id", ok: true, ms: "84 ms · 200 OK" },
-  { host: "contoh-blog.id", ok: false, ms: "timeout · 3x gagal" },
-  { host: "contoh-checkout.id", ok: true, ms: "213 ms · 200 OK" },
+  {
+    host: "contoh-api.id",
+    type: "frontend_error",
+    ok: false,
+    msg: "TypeError: cannot read 'x' of undefined",
+  },
+  {
+    host: "contoh-web.id",
+    type: "backend_error",
+    ok: false,
+    msg: "Connection refused to database",
+  },
+  { host: "contoh-app.id", type: "api_error", ok: true, msg: "GET /users 200 OK" },
+  {
+    host: "contoh-checkout.id",
+    type: "frontend_error",
+    ok: false,
+    msg: "ReferenceError: checkout is not defined",
+  },
 ];
 
 const PROMISES = [
-  { icon: Timer, label: "Pengecekan tiap menit" },
-  { icon: Bell, label: "Alert lewat Telegram" },
-  { icon: ShieldCheck, label: "Cooldown anti alert berulang" },
+  { icon: Bug, label: "Auto-capture error" },
+  { icon: MessageSquare, label: "Alert lewat Telegram" },
+  { icon: ShieldCheck, label: "Cooldown anti spam" },
 ];
 
 function BrandPanel() {
   return (
-    <div className="hidden min-h-screen flex-col justify-between bg-surface p-10 lg:flex">
-      <BrandLockup className="h-9 w-auto" />
+    <div
+      className="hidden min-h-screen flex-col justify-between p-10 lg:flex"
+      style={{ backgroundColor: "var(--brand-950)" }}
+    >
+      <img
+        src="/logo.png"
+        alt="WebWatch"
+        width={990}
+        height={606}
+        className="h-8 w-auto brightness-0 invert"
+      />
 
-      <div>
-        <h2 className="max-w-md font-display text-3xl font-bold leading-tight text-foreground">
-          Website down? Kamu tahu duluan.
-        </h2>
-        <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-          Tiap menit dipantau, alert Telegram terkirim langsung saat ada gangguan dan saat semuanya
-          pulih kembali.
-        </p>
+      <div className="space-y-8">
+        <div>
+          <h2 className="max-w-xs font-display text-3xl font-bold leading-tight text-white">
+            Aplikasi error?
+            <br />
+            Kamu tahu duluan.
+          </h2>
+          <p
+            className="mt-4 max-w-sm text-sm leading-relaxed"
+            style={{ color: "rgb(255 255 255 / 0.55)" }}
+          >
+            SDK nangkap error frontend & backend otomatis. Alert Telegram terkirim real-time.
+          </p>
+        </div>
 
-        <div className="panel mt-8 p-4">
-          <ul className="divide-y divide-border">
+        {/* APM instrument preview */}
+        <div
+          className="overflow-hidden rounded-xl"
+          style={{
+            border: "1px solid rgb(255 255 255 / 0.08)",
+            backgroundColor: "rgb(255 255 255 / 0.04)",
+          }}
+        >
+          <div
+            className="flex items-center gap-2 px-4 py-2.5"
+            style={{ borderBottom: "1px solid rgb(255 255 255 / 0.08)" }}
+          >
+            <span className="font-mono text-xs" style={{ color: "rgb(255 255 255 / 0.35)" }}>
+              webwatch · apm
+            </span>
+            <span className="ml-auto">
+              <Badge
+                variant="neutral"
+                className="border-0 text-[10px]"
+                style={{
+                  backgroundColor: "rgb(255 255 255 / 0.08)",
+                  color: "rgb(255 255 255 / 0.4)",
+                }}
+              >
+                contoh tampilan
+              </Badge>
+            </span>
+          </div>
+
+          <ul className="divide-y" style={{ borderColor: "rgb(255 255 255 / 0.06)" }}>
             {SAMPLE_ROWS.map((row) => (
-              <li key={row.host} className="flex items-center gap-3 py-2.5">
+              <li key={row.host} className="flex items-center gap-3 px-4 py-3">
                 <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? "bg-up" : "bg-danger"}`}
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${row.ok ? "bg-[var(--brand-500)]" : "bg-danger"}`}
                   aria-hidden="true"
                 />
-                <span className="flex-1 font-mono text-sm font-medium text-foreground">
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-sm font-medium"
+                  style={{ color: "rgb(255 255 255 / 0.75)" }}
+                >
                   {row.host}
                 </span>
-                <span className="font-mono text-xs text-muted-foreground">{row.ms}</span>
+                <span
+                  className="shrink-0 font-mono text-xs tabular-nums"
+                  style={{
+                    color: row.ok
+                      ? "rgb(255 255 255 / 0.35)"
+                      : "rgb(var(--danger-rgb, 220 38 38) / 0.75)",
+                  }}
+                >
+                  {row.type}
+                </span>
               </li>
             ))}
           </ul>
-          <div className="mt-3 rounded-lg border border-border bg-muted px-3 py-2.5">
-            <p className="font-mono text-xs text-muted-foreground">telegram · 12:03</p>
-            <p className="mt-1 text-sm font-medium text-foreground">
-              <span className="font-semibold text-danger">DOWN</span>
-              <span className="text-muted-foreground"> · contoh-blog.id</span>
+
+          {/* Telegram alert mock */}
+          <div
+            className="px-4 py-3"
+            style={{
+              borderTop: "1px solid rgb(255 255 255 / 0.06)",
+              backgroundColor: "rgb(255 255 255 / 0.03)",
+            }}
+          >
+            <p className="font-mono text-xs" style={{ color: "rgb(255 255 255 / 0.3)" }}>
+              WebWatch Bot · 12:03
             </p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">
-              timeout · gagal berturut-turut 3x · durasi 02:14
+            <p className="mt-1.5 text-sm font-medium" style={{ color: "rgb(255 255 255 / 0.75)" }}>
+              <span className="font-bold text-danger">ERROR</span>
+              <span style={{ color: "rgb(255 255 255 / 0.45)" }}> · contoh-api.id</span>
+            </p>
+            <p className="mt-0.5 font-mono text-xs" style={{ color: "rgb(255 255 255 / 0.3)" }}>
+              TypeError: cannot read properties of undefined · stack trace tersedia
             </p>
           </div>
-          <Badge variant="neutral" className="mt-3">
-            Contoh tampilan, bukan monitoring nyata
-          </Badge>
         </div>
       </div>
 
-      <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+      {/* Footer promises */}
+      <ul
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs"
+        style={{ color: "rgb(255 255 255 / 0.35)" }}
+      >
         {PROMISES.map((promise) => (
-          <li key={promise.label} className="flex items-center gap-2">
-            <promise.icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+          <li key={promise.label} className="flex items-center gap-1.5">
+            <promise.icon
+              className="h-3.5 w-3.5"
+              style={{ color: "var(--brand-500)" }}
+              aria-hidden="true"
+            />
             {promise.label}
           </li>
         ))}
@@ -254,34 +338,38 @@ function AuthPage() {
       <div className="grid w-full lg:grid-cols-2">
         <BrandPanel />
 
-        <div className="flex min-h-screen flex-col justify-center px-4 py-12 sm:px-8 lg:px-12">
+        {/* ── Form column ─────────────────────────────────────────────── */}
+        <div className="flex min-h-screen flex-col justify-center bg-background px-5 py-12 sm:px-10 lg:px-14">
           <Link
             to="/"
-            className="mb-8 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="mb-10 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
             kembali ke beranda
           </Link>
 
-          <div className="mx-auto w-full max-w-md">
-            <BrandLockup className="h-8 w-auto" />
+          <div className="mx-auto w-full max-w-sm">
+            {/* App icon — small visual anchor */}
+            <img src="/favicon.png" alt="" aria-hidden="true" className="mb-6 h-10 w-10" />
 
-            <h1 className="mt-6 font-display text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
               Masuk ke dashboard
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Login tanpa password, kode masuk dikirim ke Telegram.
+              Login tanpa password — kode dikirim ke Telegram.
             </p>
 
+            {/* ── Email step ──────────────────────────────────────────── */}
             {step === "email" && (
-              <form onSubmit={submitEmail} className="mt-6 space-y-4">
+              <form onSubmit={submitEmail} className="mt-8 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Alamat email</Label>
                   <Input
                     id="email"
                     type="email"
                     required
                     autoComplete="email"
+                    autoFocus
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="kamu@domain.com"
@@ -293,15 +381,16 @@ function AuthPage() {
                 </Button>
                 <p className="flex items-start gap-2 text-xs text-muted-foreground">
                   <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  Kode 6 digit dikirim lewat bot Telegram. Belum punya bot? Nanti kamu bisa set
-                  langsung.
+                  Kode 6 digit dikirim lewat bot Telegram. Belum punya bot? Kamu bisa set langsung
+                  setelah mendaftar.
                 </p>
               </form>
             )}
 
+            {/* ── Link Telegram step ──────────────────────────────────── */}
             {step === "link" && (
-              <div className="mt-6 space-y-4">
-                <div className="panel p-4">
+              <div className="mt-8 space-y-4">
+                <div className="rounded-xl border border-border bg-surface p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle2
                       className="mt-0.5 h-5 w-5 shrink-0 text-success"
@@ -322,7 +411,7 @@ function AuthPage() {
                 </Button>
                 <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  Menunggu koneksi Telegram
+                  Menunggu koneksi Telegram…
                 </p>
                 <button
                   type="button"
@@ -334,39 +423,55 @@ function AuthPage() {
               </div>
             )}
 
+            {/* ── OTP step ────────────────────────────────────────────── */}
             {step === "code" && (
-              <form onSubmit={submitCode} className="mt-6 space-y-4">
+              <form onSubmit={submitCode} className="mt-8 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="otp">Kode masuk</Label>
+                  <Label htmlFor="otp">Kode masuk dari Telegram</Label>
                   <InputOTP
                     id="otp"
                     maxLength={6}
                     value={code}
                     onChange={setCode}
+                    autoFocus
                     className="w-full"
                   >
                     <InputOTPGroup className="w-full">
                       {Array.from({ length: 6 }).map((_, i) => (
-                        <InputOTPSlot key={i} index={i} className="h-12 flex-1 text-base" />
+                        <InputOTPSlot
+                          key={i}
+                          index={i}
+                          className="h-12 flex-1 font-mono text-base"
+                        />
                       ))}
                     </InputOTPGroup>
                   </InputOTP>
                   <p className="text-xs text-muted-foreground">
-                    Terkirim ke Telegram untuk {email}
+                    Terkirim ke Telegram untuk{" "}
+                    <span className="font-medium text-foreground">{email}</span>
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading || code.length !== 6}>
                   {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                   Verifikasi dan masuk
                 </Button>
-                <button
-                  type="button"
-                  className="w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={resend}
-                  disabled={loading || resendIn > 0}
-                >
-                  {resendIn > 0 ? `Kirim ulang (${resendIn}s)` : "Kirim ulang kode"}
-                </button>
+                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <button
+                    type="button"
+                    className="transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={resend}
+                    disabled={loading || resendIn > 0}
+                  >
+                    {resendIn > 0 ? `Kirim ulang (${resendIn}s)` : "Kirim ulang kode"}
+                  </button>
+                  <button
+                    type="button"
+                    className="transition-colors hover:text-foreground"
+                    onClick={() => setStep("email")}
+                  >
+                    Ganti email
+                  </button>
+                </div>
               </form>
             )}
           </div>

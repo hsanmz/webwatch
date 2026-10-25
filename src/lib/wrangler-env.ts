@@ -21,13 +21,20 @@ export function getAppEnv(): AppEnv {
   if (currentEnv) return currentEnv;
 
   try {
-    const req = getRequest() as any;
+    const req = getRequest() as
+      | {
+          runtime?: { cloudflare?: { env?: AppEnv } };
+          cf?: { env?: AppEnv };
+        }
+      | undefined;
     const env = req?.runtime?.cloudflare?.env ?? req?.cf?.env;
     if (env && env.DB) {
       currentEnv = env as AppEnv;
       return currentEnv;
     }
-  } catch (e) {}
+  } catch {
+    // No request context available (mis. dipanggil di luar handler) — lanjut ke globalThis.
+  }
 
   const globalEnv = (globalThis as { __env__?: AppEnv }).__env__;
   if (globalEnv && globalEnv.DB) return globalEnv;

@@ -1,7 +1,49 @@
 {
   "name": "@webwatch/sdk",
-  "version": "1.0.0",
-  "description": "APM SDK for WebWatch",
-  "main": "index.js",
-  "type": "module"
+  "version": "0.1.0",
+  "description": "Zero-config error capture SDK for WebWatch. Auto-captures uncaught errors and unhandled rejections, batches them, and sends them to your WebWatch ingest endpoint.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./express": {
+      "types": "./dist/integrations/express.d.ts",
+      "default": "./dist/integrations/express.js"
+    },
+    "./hono": {
+      "types": "./dist/integrations/hono.d.ts",
+      "default": "./dist/integrations/hono.js"
+    },
+    "./fastify": {
+      "types": "./dist/integrations/fastify.d.ts",
+      "default": "./dist/integrations/fastify.js"
+    },
+    "./next": {
+      "types": "./dist/integrations/next.d.ts",
+      "default": "./dist/integrations/next.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "apm",
+    "error-monitoring",
+    "webwatch",
+    "observability",
+    "alerting"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  }
 }

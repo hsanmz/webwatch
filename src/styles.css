@@ -33,7 +33,7 @@
  *   - `--color-warning` is warning-700 darkened one step (96600A) for the same
  *     reason: warning-700 on warning-100 measures 4.42:1.
  *   - `--paused` is a neutral, not amber. Paused means "not being monitored",
- *     which is not a fault; amber is reserved for degraded and expiring SSL.
+ *     which is not a fault; amber is reserved for degraded.
  *
  * Mirrors that cannot read CSS variables (must be kept in sync manually):
  *   src/lib/error-page.ts: standalone crash page that cannot load app CSS.
@@ -180,8 +180,8 @@
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
 
   /* ---- Typography ---------------------------------------------------- */
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }

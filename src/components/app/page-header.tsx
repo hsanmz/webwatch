@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
 
 /*
- * The eyebrow is a plain muted label, not a pill and not a wide-tracked
- * uppercase tag. It tells the reader which part of the product they are in,
- * then gets out of the way.
+ * PageHeader sets the tone for every authenticated page.
+ *
+ * The eyebrow system uses a small colored bar beside a mono label to mark
+ * which part of the product the user is in — the same visual grammar used on
+ * the landing page sections. This makes section identity consistent across
+ * the whole product without adding decorative weight.
+ *
+ * The heading is always Space Grotesk (font-display) for authority. The
+ * description stays muted — it explains, it does not announce.
  */
 export function PageHeader({
   title,
@@ -19,12 +25,17 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        {eyebrow && <p className="text-xs font-medium text-muted-foreground">{eyebrow}</p>}
-        <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+        {eyebrow && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="h-1 w-5 rounded-full bg-primary" aria-hidden="true" />
+            <p className="font-mono text-xs font-medium text-primary">{eyebrow}</p>
+          </div>
+        )}
+        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {title}
         </h1>
         {description && (
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             {description}
           </p>
         )}

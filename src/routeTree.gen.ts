@@ -16,8 +16,7 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as StatusRouteImport } from './routes/status'
 import { Route as AuthenticatedApmRouteImport } from './routes/_authenticated/apm'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedIncidentsRouteImport } from './routes/_authenticated/incidents'
-import { Route as AuthenticatedMonitorsRouteImport } from './routes/_authenticated/monitors'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as ApiIngestRouteImport } from './routes/api/ingest'
 import { Route as ApiSitesRouteImport } from './routes/api/sites'
 import { Route as ApiSystemStatusRouteImport } from './routes/api/system-status'
@@ -33,7 +32,6 @@ import { Route as ApiSitesDetailRouteImport } from './routes/api/sites/detail'
 import { Route as ApiSitesEventsRouteImport } from './routes/api/sites/events'
 import { Route as ApiSitesKeysRouteImport } from './routes/api/sites/keys'
 import { Route as ApiSitesVerifyRouteImport } from './routes/api/sites/verify'
-import { Route as ApiPublicCronRunRouteImport } from './routes/api/public/cron/run'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -70,14 +68,9 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedIncidentsRoute = AuthenticatedIncidentsRouteImport.update({
-  id: '/incidents',
-  path: '/incidents',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMonitorsRoute = AuthenticatedMonitorsRouteImport.update({
-  id: '/monitors',
-  path: '/monitors',
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiIngestRoute = ApiIngestRouteImport.update({
@@ -155,11 +148,6 @@ const ApiSitesVerifyRoute = ApiSitesVerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => ApiSitesRoute,
 } as any)
-const ApiPublicCronRunRoute = ApiPublicCronRunRouteImport.update({
-  id: '/api/public/cron/run',
-  path: '/api/public/cron/run',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPublicTelegramWebhookRoute =
   ApiPublicTelegramWebhookRouteImport.update({
     id: '/api/public/telegram/webhook',
@@ -174,8 +162,7 @@ export interface FileRoutesByFullPath {
   '/status': typeof StatusRoute
   '/apm': typeof AuthenticatedApmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/incidents': typeof AuthenticatedIncidentsRoute
-  '/monitors': typeof AuthenticatedMonitorsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -191,7 +178,6 @@ export interface FileRoutesByFullPath {
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
   '/api/sites/verify': typeof ApiSitesVerifyRoute
-  '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -201,8 +187,7 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/apm': typeof AuthenticatedApmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/incidents': typeof AuthenticatedIncidentsRoute
-  '/monitors': typeof AuthenticatedMonitorsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -218,7 +203,6 @@ export interface FileRoutesByTo {
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
   '/api/sites/verify': typeof ApiSitesVerifyRoute
-  '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesById {
@@ -230,8 +214,7 @@ export interface FileRoutesById {
   '/status': typeof StatusRoute
   '/_authenticated/apm': typeof AuthenticatedApmRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/incidents': typeof AuthenticatedIncidentsRoute
-  '/_authenticated/monitors': typeof AuthenticatedMonitorsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/ingest': typeof ApiIngestRoute
   '/api/sites': typeof ApiSitesRouteWithChildren
   '/api/system-status': typeof ApiSystemStatusRoute
@@ -247,7 +230,6 @@ export interface FileRoutesById {
   '/api/sites/events': typeof ApiSitesEventsRoute
   '/api/sites/keys': typeof ApiSitesKeysRoute
   '/api/sites/verify': typeof ApiSitesVerifyRoute
-  '/api/public/cron/run': typeof ApiPublicCronRunRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRouteTypes {
@@ -259,8 +241,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/apm'
     | '/dashboard'
-    | '/incidents'
-    | '/monitors'
+    | '/settings'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -276,7 +257,6 @@ export interface FileRouteTypes {
     | '/api/sites/events'
     | '/api/sites/keys'
     | '/api/sites/verify'
-    | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -286,8 +266,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/apm'
     | '/dashboard'
-    | '/incidents'
-    | '/monitors'
+    | '/settings'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -303,7 +282,6 @@ export interface FileRouteTypes {
     | '/api/sites/events'
     | '/api/sites/keys'
     | '/api/sites/verify'
-    | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   id:
     | '__root__'
@@ -314,8 +292,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/_authenticated/apm'
     | '/_authenticated/dashboard'
-    | '/_authenticated/incidents'
-    | '/_authenticated/monitors'
+    | '/_authenticated/settings'
     | '/api/ingest'
     | '/api/sites'
     | '/api/system-status'
@@ -331,7 +308,6 @@ export interface FileRouteTypes {
     | '/api/sites/events'
     | '/api/sites/keys'
     | '/api/sites/verify'
-    | '/api/public/cron/run'
     | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -350,7 +326,6 @@ export interface RootRouteChildren {
   ApiAuthOtpRoute: typeof ApiAuthOtpRoute
   ApiAuthVerifyRoute: typeof ApiAuthVerifyRoute
   ApiPublicSdkRoute: typeof ApiPublicSdkRoute
-  ApiPublicCronRunRoute: typeof ApiPublicCronRunRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
 
@@ -405,18 +380,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/incidents': {
-      id: '/_authenticated/incidents'
-      path: '/incidents'
-      fullPath: '/incidents'
-      preLoaderRoute: typeof AuthenticatedIncidentsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/monitors': {
-      id: '/_authenticated/monitors'
-      path: '/monitors'
-      fullPath: '/monitors'
-      preLoaderRoute: typeof AuthenticatedMonitorsRouteImport
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/ingest': {
@@ -524,13 +492,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSitesVerifyRouteImport
       parentRoute: typeof ApiSitesRoute
     }
-    '/api/public/cron/run': {
-      id: '/api/public/cron/run'
-      path: '/api/public/cron/run'
-      fullPath: '/api/public/cron/run'
-      preLoaderRoute: typeof ApiPublicCronRunRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/telegram/webhook': {
       id: '/api/public/telegram/webhook'
       path: '/api/public/telegram/webhook'
@@ -544,16 +505,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedApmRoute: typeof AuthenticatedApmRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedIncidentsRoute: typeof AuthenticatedIncidentsRoute
-  AuthenticatedMonitorsRoute: typeof AuthenticatedMonitorsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSitesIdRoute: typeof AuthenticatedSitesIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApmRoute: AuthenticatedApmRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedIncidentsRoute: AuthenticatedIncidentsRoute,
-  AuthenticatedMonitorsRoute: AuthenticatedMonitorsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSitesIdRoute: AuthenticatedSitesIdRoute,
 }
 
@@ -595,7 +554,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthOtpRoute: ApiAuthOtpRoute,
   ApiAuthVerifyRoute: ApiAuthVerifyRoute,
   ApiPublicSdkRoute: ApiPublicSdkRoute,
-  ApiPublicCronRunRoute: ApiPublicCronRunRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport

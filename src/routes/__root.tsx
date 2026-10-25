@@ -16,18 +16,25 @@ import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <p className="font-display text-7xl font-bold text-foreground">404</p>
-        <h1 className="mt-4 font-display text-xl font-semibold text-foreground">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+      {/* Brand anchor */}
+      <div className="mb-12">
+        <img src="/favicon.png" alt="" aria-hidden="true" className="h-10 w-10 opacity-40" />
+      </div>
+      <div className="max-w-sm text-center">
+        <p className="font-mono text-xs font-medium text-muted-foreground">404</p>
+        <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground">
           Halaman tidak ditemukan
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
           Alamat yang kamu buka tidak ada atau sudah dipindahkan.
         </p>
-        <div className="mt-6 flex justify-center">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button asChild>
             <Link to="/">Kembali ke beranda</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/dashboard">Dashboard</Link>
           </Button>
         </div>
       </div>
@@ -40,15 +47,19 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+      <div className="mb-12">
+        <img src="/favicon.png" alt="" aria-hidden="true" className="h-10 w-10 opacity-40" />
+      </div>
+      <div className="max-w-sm text-center">
+        <p className="font-mono text-xs font-medium text-danger">error</p>
+        <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground">
           Halaman ini gagal dimuat
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
           Ada masalah di sisi kami. Coba muat ulang, atau kembali ke beranda.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button
             onClick={() => {
               router.invalidate();
@@ -74,11 +85,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // Browser chrome cannot read a CSS variable, so the value mirrors
       // --brand-700 from src/styles.css.
       { name: "theme-color", content: "#078765" },
-      { title: "WebWatch: Uptime Monitor dengan Alert Telegram" },
+      { title: "WebWatch: APM & Error Monitoring dengan Alert Telegram" },
       {
         name: "description",
         content:
-          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
+          "Terima log error dari aplikasi frontend/backend kamu dan dapatkan alert Telegram instan saat error terjadi.",
       },
       { property: "og:type", content: "website" },
       { property: "og:image", content: "/og.png" },
@@ -86,21 +97,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "WebWatch: Uptime Monitor dengan Alert Telegram",
+        content: "WebWatch: APM & Error Monitoring dengan Alert Telegram",
       },
-      { property: "og:title", content: "WebWatch: Uptime Monitor dengan Alert Telegram" },
+      { property: "og:title", content: "WebWatch: APM & Error Monitoring dengan Alert Telegram" },
       {
         property: "og:description",
         content:
-          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
+          "Terima log error dari aplikasi frontend/backend kamu dan dapatkan alert Telegram instan saat error terjadi.",
       },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "/og.png" },
-      { name: "twitter:title", content: "WebWatch: Uptime Monitor dengan Alert Telegram" },
+      { name: "twitter:title", content: "WebWatch: APM & Error Monitoring dengan Alert Telegram" },
       {
         name: "twitter:description",
         content:
-          "Pantau website setiap menit dan terima alert Telegram instan saat situs down atau pulih kembali.",
+          "Terima log error dari aplikasi frontend/backend kamu dan dapatkan alert Telegram instan saat error terjadi.",
       },
     ],
     links: [
@@ -170,10 +181,10 @@ function GlobalSystemStatus() {
         to="/status"
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground shadow-lg transition-colors hover:text-foreground"
+        className="flex items-center gap-2 rounded-full border border-border bg-background/95 px-3.5 py-1.5 text-xs font-medium text-muted-foreground shadow-md backdrop-blur transition-colors duration-[var(--motion-fast)] hover:border-border-strong hover:text-foreground"
       >
         <span
-          className={`h-2 w-2 shrink-0 rounded-full ${dot} ${state.key === "operational" ? "live-dot" : ""}`}
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot} ${state.key === "operational" ? "live-dot" : ""}`}
           aria-hidden="true"
         />
         <span className="sr-only">Status sistem WebWatch: </span>

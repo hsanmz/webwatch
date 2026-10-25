@@ -19,30 +19,20 @@ type SiteRow = {
   id: string;
   name: string | null;
   url: string;
-  interval_seconds: number;
-  fail_threshold: number;
-  check_keyword: string | null;
-  check_ssl: boolean;
   is_active: boolean;
-  current_status: string;
-  last_checked_at: string | null;
   verification_token: string | null;
   verification_status: string;
+  created_at: string;
 };
 
 type SiteDbRow = {
   id: string;
   name: string | null;
   url: string;
-  interval_seconds: number;
-  fail_threshold: number;
-  check_keyword: string | null;
-  check_ssl: number;
   is_active: number;
-  current_status: string;
-  last_checked_at: string | null;
   verification_token: string | null;
   verification_status: string;
+  created_at: string;
 };
 
 function mapSite(row: SiteDbRow): SiteRow {
@@ -50,15 +40,10 @@ function mapSite(row: SiteDbRow): SiteRow {
     id: row.id,
     name: row.name,
     url: row.url,
-    interval_seconds: Number(row.interval_seconds),
-    fail_threshold: Number(row.fail_threshold),
-    check_keyword: row.check_keyword,
-    check_ssl: toBool(row.check_ssl),
     is_active: toBool(row.is_active),
-    current_status: row.current_status,
-    last_checked_at: row.last_checked_at,
     verification_token: row.verification_token,
     verification_status: row.verification_status,
+    created_at: row.created_at,
   };
 }
 
@@ -91,12 +76,6 @@ function normalizeUrl(value: unknown): string | null {
   }
 }
 
-function clampInt(value: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""));
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(n)));
-}
-
 export async function listSites(request: Request): Promise<Response> {
   const denied = await userFor(request);
   if (denied) return denied;
@@ -104,8 +83,7 @@ export async function listSites(request: Request): Promise<Response> {
   try {
     const { results } = await db()
       .prepare(
-        `SELECT id, name, url, interval_seconds, fail_threshold, check_keyword, check_ssl,
-                is_active, current_status, last_checked_at, verification_token, verification_status
+        `SELECT id, name, url, is_active, verification_token, verification_status, created_at
          FROM sites WHERE user_id = ? ORDER BY created_at ASC`,
       )
       .bind(user.id)
@@ -119,23 +97,7 @@ export async function listSites(request: Request): Promise<Response> {
 
 type CreateSiteBody = {
   url?: unknown;
-  intervalMinutes?: unknown;
-  failThreshold?: unknown;
-  keyword?: unknown;
-  ssl?: unknown;
 };
-
-type UpdateSiteBody = {
-  id?: unknown;
-  patch?: Record<string, unknown>;
-  is_active?: unknown;
-  intervalMinutes?: unknown;
-  failThreshold?: unknown;
-  keyword?: unknown;
-  ssl?: unknown;
-};
-
-type DeleteSiteBody = { id?: unknown };
 
 export async function createSite(request: Request): Promise<Response> {
   const denied = await userFor(request);
@@ -163,20 +125,10 @@ export async function createSite(request: Request): Promise<Response> {
   try {
     await db()
       .prepare(
-        `INSERT INTO sites (id, user_id, url, name, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        `INSERT INTO sites (id, user_id, url, name, verification_token, verification_status)
+         VALUES (?, ?, ?, ?, ?, 'pending')`,
       )
-      .bind(
-        id,
-        user.id,
-        url,
-        new URL(url).hostname,
-        clampInt(body.intervalMinutes, 5, 1, 1440) * 60,
-        clampInt(body.failThreshold, 2, 1, 100),
-        typeof body.keyword === "string" && body.keyword.trim() ? body.keyword.trim() : null,
-        body.ssl === true ? 1 : 0,
-        token,
-      )
+      .bind(id, user.id, url, new URL(url).hostname, token)
       .run();
   } catch (error) {
     const msg = error instanceof Error ? error.message.toLowerCase() : "";
@@ -188,6 +140,12 @@ export async function createSite(request: Request): Promise<Response> {
   }
   return json({ ok: true, id });
 }
+
+type UpdateSiteBody = {
+  id?: unknown;
+  name?: unknown;
+  is_active?: unknown;
+};
 
 export async function updateSite(request: Request): Promise<Response> {
   const denied = await userFor(request);
@@ -205,55 +163,34 @@ export async function updateSite(request: Request): Promise<Response> {
 
   try {
     const current = await db()
-      .prepare(
-        "SELECT interval_seconds, fail_threshold, check_keyword, check_ssl, is_active FROM sites WHERE id = ? AND user_id = ? LIMIT 1",
-      )
+      .prepare("SELECT is_active FROM sites WHERE id = ? AND user_id = ? LIMIT 1")
       .bind(id, user.id)
-      .first<{
-        interval_seconds: number;
-        fail_threshold: number;
-        check_keyword: string | null;
-        check_ssl: number;
-        is_active: number;
-      }>();
+      .first<{ is_active: number }>();
     if (!current) return json({ error: "not_found" }, 404);
 
-    const patch = (body.patch ?? body) as Record<string, unknown>;
-
-    const intervalSeconds =
-      patch["intervalMinutes"] !== undefined
-        ? clampInt(patch["intervalMinutes"], 5, 1, 1440) * 60
-        : current.interval_seconds;
-    const failThreshold =
-      patch["failThreshold"] !== undefined
-        ? clampInt(patch["failThreshold"], 2, 1, 100)
-        : current.fail_threshold;
-    const keyword =
-      patch["keyword"] !== undefined
-        ? typeof patch["keyword"] === "string" && patch["keyword"].trim()
-          ? patch["keyword"].trim()
-          : null
-        : current.check_keyword;
-    const checkSsl =
-      patch["ssl"] !== undefined ? (patch["ssl"] === true ? 1 : 0) : current.check_ssl;
+    const name = body.name ?? undefined;
     const isActive =
-      patch["is_active"] !== undefined ? (patch["is_active"] === true ? 1 : 0) : current.is_active;
+      body.is_active !== undefined ? (body.is_active === true ? 1 : 0) : current.is_active;
 
-    await db()
-      .prepare(
-        `UPDATE sites SET
-          interval_seconds = ?, fail_threshold = ?, check_keyword = ?, check_ssl = ?, is_active = ?,
-          consecutive_failures = CASE WHEN ? = 1 AND is_active = 0 THEN 0 ELSE consecutive_failures END
-         WHERE id = ? AND user_id = ?`,
-      )
-      .bind(intervalSeconds, failThreshold, keyword, checkSsl, isActive, isActive, id, user.id)
-      .run();
+    if (name !== undefined) {
+      await db()
+        .prepare("UPDATE sites SET name = ?, is_active = ? WHERE id = ? AND user_id = ?")
+        .bind(typeof name === "string" && name.trim() ? name.trim() : null, isActive, id, user.id)
+        .run();
+    } else {
+      await db()
+        .prepare("UPDATE sites SET is_active = ? WHERE id = ? AND user_id = ?")
+        .bind(isActive, id, user.id)
+        .run();
+    }
     return json({ ok: true });
   } catch (error) {
     console.error("[updateSite] DB error:", error);
     return json({ error: "server_error" }, 500);
   }
 }
+
+type DeleteSiteBody = { id?: unknown };
 
 export async function deleteSite(request: Request): Promise<Response> {
   const denied = await userFor(request);
@@ -282,6 +219,18 @@ export async function deleteSite(request: Request): Promise<Response> {
   }
 }
 
+type ApmEventRow = {
+  id: string;
+  environment: string;
+  event_type: string;
+  message: string;
+  stack_trace: string | null;
+  url: string | null;
+  method: string | null;
+  user_agent: string | null;
+  created_at: string;
+};
+
 export async function siteDetail(request: Request): Promise<Response> {
   const denied = await userFor(request);
   if (denied) return denied;
@@ -294,51 +243,21 @@ export async function siteDetail(request: Request): Promise<Response> {
   try {
     const site = await db()
       .prepare(
-        `SELECT id, name, url, current_status, is_active, interval_seconds, fail_threshold, check_keyword, check_ssl, verification_token, verification_status, last_checked_at
+        `SELECT id, name, url, is_active, verification_token, verification_status, created_at
          FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
       )
       .bind(id, user.id)
       .first<SiteDbRow>();
     if (!site) return json({ error: "not_found" }, 404);
 
-    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const { results: checksDb } = await db()
+    const { results: eventsDb } = await db()
       .prepare(
-        "SELECT id, is_up, status_code, response_time_ms, error_message, checked_at FROM checks WHERE site_id = ? AND checked_at >= ? ORDER BY checked_at DESC LIMIT 5000",
-      )
-      .bind(site.id, since)
-      .all<{
-        id: string;
-        is_up: number;
-        status_code: number | null;
-        response_time_ms: number | null;
-        error_message: string | null;
-        checked_at: string;
-      }>();
-    const checks = (checksDb ?? [])
-      .map((c) => ({
-        id: c.id,
-        is_up: toBool(c.is_up),
-        status_code: c.status_code,
-        response_time_ms: c.response_time_ms,
-        error_message: c.error_message,
-        checked_at: c.checked_at,
-      }))
-      .reverse();
-
-    const { results: incidents } = await db()
-      .prepare(
-        "SELECT id, started_at, resolved_at, error_message FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT 20",
+        "SELECT id, environment, event_type, message, stack_trace, url, method, user_agent, created_at FROM apm_events WHERE site_id = ? ORDER BY created_at DESC LIMIT 100",
       )
       .bind(site.id)
-      .all<{
-        id: string;
-        started_at: string;
-        resolved_at: string | null;
-        error_message: string | null;
-      }>();
+      .all<ApmEventRow>();
 
-    return json({ site: mapSite(site), checks, incidents: incidents ?? [] });
+    return json({ site: mapSite(site), events: eventsDb ?? [] });
   } catch (error) {
     console.error("[siteDetail] DB error:", error);
     return json({ error: "server_error" }, 500);
@@ -379,7 +298,7 @@ export async function verifySite(request: Request): Promise<Response> {
   try {
     const checkUrl = new URL("/webwatch-verify.txt", site.url).toString();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timer = setTimeout(() => controller.abort(), 10000);
 
     const res = await fetch(checkUrl, {
       method: "GET",

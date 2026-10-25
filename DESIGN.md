@@ -1,10 +1,14 @@
 # WebWatch — Technical Design
 
-> Architecture, data model, and runtime flows of the WebWatch APM & Uptime Monitoring platform.
+> Architecture, data model, and runtime flows of the WebWatch APM (error monitoring) platform.
 >
 > This document describes **what is actually implemented**. Where the product plan and the
-> implementation diverge, the divergence is recorded in [Known Gaps](#18-known-gaps--technical-debt)
-> rather than papered over.
+> implementation diverge, the divergence is recorded in
+> [Known Gaps](#19-known-gaps--technical-debt) rather than papered over.
+>
+> The synthetic uptime monitoring product area (probes, checks, incidents, SSL warning, cron
+> scheduler worker) was **removed**. Where this document mentions those words it explains why
+> they are gone — it never documents them as live behaviour.
 
 ---
 
@@ -19,1052 +23,671 @@
 7. [Authentication & Session Model](#7-authentication--session-model)
 8. [Site Lifecycle & Domain Verification](#8-site-lifecycle--domain-verification)
 9. [APM Ingestion Protocol](#9-apm-ingestion-protocol)
-10. [Monitoring Engine](#10-monitoring-engine)
-11. [Notification Model](#11-notification-model)
-12. [Telegram Bot Interface](#12-telegram-bot-interface)
-13. [Public Status Page](#13-public-status-page)
-14. [HTTP API Reference](#14-http-api-reference)
-15. [Frontend Route Map](#15-frontend-route-map)
+10. [Notification Model](#10-notification-model)
+11. [Telegram Bot Interface](#11-telegram-bot-interface)
+12. [Public Status Page](#12-public-status-page)
+13. [The `@webwatch/sdk` npm Package](#13-the-webwatchsdk-npm-package)
+14. [API Surface & Route Map](#14-api-surface--route-map)
+15. [Frontend Architecture](#15-frontend-architecture)
 16. [Design System](#16-design-system)
 17. [Security Model](#17-security-model)
-18. [Known Gaps & Technical Debt](#18-known-gaps--technical-debt)
-19. [Deployment Topology](#19-deployment-topology)
-20. [Test Strategy](#20-test-strategy)
+18. [Testing](#18-testing)
+19. [Known Gaps & Technical Debt](#19-known-gaps--technical-debt)
+20. [Deployment](#20-deployment)
 
 ---
 
 ## 1. Product Goals
 
-WebWatch is a self-hosted monitoring platform with two pillars that run side by side:
+| Goal                                      | Priority | Notes                                                                                      |
+| ----------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| Error-log ingestion for user applications | Core     | `POST /api/ingest`, Bearer per-site API key, batch of events, stored in D1                 |
+| Zero-config developer onboarding          | Core     | Two env vars (`WEBWATCH_KEY`, `WEBWATCH_URL`) + one import; no-install CDN SDK as fallback |
+| Immediate Telegram alerting on errors     | Core     | APM errors + OTP login codes, HTML parse mode                                              |
+| Domain ownership verification             | Core     | Blocks a user from claiming someone else's domain                                          |
+| Public status page                        | Minor    | `/status` backed by `/api/system-status`                                                   |
 
-| Pillar | Direction | Mechanism |
-| --- | --- | --- |
-| **Synthetic uptime monitoring** | Outbound | The platform probes the user's URL on a schedule, records latency and availability, and raises incidents. |
-| **Application performance monitoring (APM)** | Inbound | A tiny SDK embedded in the user's app reports errors to the ingestion endpoint. |
-
-Three constraints shape every design decision:
-
-1. **Edge-native.** Everything runs on Cloudflare Workers + D1. There is no long-lived server, no
-   connection pool, and no external queue.
-2. **Zero-password authentication.** Users authenticate through Telegram, which removes password
-   storage, password reset flows, and credential phishing as an entire class of problem.
-3. **Minimal footprint.** The SDK is a single ES module. It never blocks the host application: every
-   network call it makes is fire-and-forget and all failures are swallowed.
+Runtime target is a single Cloudflare Worker with a D1 database. No queue workers, no cron
+triggers, no external services besides Telegram.
 
 ---
 
 ## 2. System Topology
 
 ```
-                        ┌──────────────────────────────┐
-                        │        Cloudflare Edge       │
-   Browser ─────────────►            DNS / TLS          │
-   SDK    ─────────────►└──────────────────────────────┘
-        │  POST /api/ingest (Bearer ww_…)            │
-        │  GET  /api/public/sdk                      │
-        ▼                                             ▼
-┌────────────────────────────────────┐      ┌───────────────────────────────┐
-│   Main Worker  "webwatch"          │      │ Scheduler Worker              │
-│   (TanStack Start + Nitro,         │      │ "webwatch-scheduler"          │
-│    cloudflare-module preset)       │◄─────┤ cron: * * * * *                │
-│                                    │      │                               │
-│  ┌──────────────────────────────┐  │      │ service binding MAIN ───────►│
-│  │ SSR pages                    │  │      └───────────────────────────────┘
-│  │ /api/* route handlers         │  │
-│  │ Nitro plugin: env capture     │  │
-│  └──────────────────────────────┘  │
-│                                    │      ┌───────────────────────────────┐
-│                                    │      │  Cloudflare D1  "webwatch"     │
-│                                    ├─────►│  SQLite · binding "DB"        │
-│                                    │      │  migrations/d1/*.sql          │
-│                                    │      └───────────────────────────────┘
-│                                    │
-│  ┌──────────────────────────────┐  │      ┌───────────────────────────────┐
-│  │ POST /api/public/cron/run    │──┼─────►│  Telegram Bot API             │
-│  │ POST /api/public/telegram/…  │──┼─────►│  sendMessage / setWebhook     │
-│  └──────────────────────────────┘  │      └───────────────────────────────┘
-└────────────────────────────────────┘
+┌────────────────────────────┐        ┌────────────────────────────┐
+│  Customer app (browser)    │        │  Customer app (server)     │
+│  SDK via /api/public/sdk   │        │  @webwatch/sdk (npm)       │
+└─────────────┬──────────────┘        └─────────────┬──────────────┘
+              │       POST /api/ingest (Bearer ww_) │
+              ▼                                     ▼
+      ┌───────────────────────────────────────────────────┐
+      │        Cloudflare Worker "webwatch"               │
+      │   TanStack Start + Nitro, cloudflare-module       │
+      │  ┌──────────────┐  ┌────────────┐  ┌───────────┐  │
+      │  │ Dashboard/API│  │ Ingest     │  │ Telegram  │  │
+      │  │ (SSR/React)  │  │ + bot      │  │ Bot API   │  │
+      │  └──────────────┘  └────────────┘  └───────────┘  │
+      └───────────────────────────┬───────────────────────┘
+                                  ▼
+                            ┌──────────┐
+                            │ Cloudflare│
+                            │     D1    │
+                            └──────────┘
 ```
 
-### Why the scheduler is a separate Worker
-
-The main worker is built with Nitro's `cloudflare-module` preset. That preset wraps the user's
-worker in a generated module and **swallows the `scheduled` event** — the framework's own handler
-receives the event and the application's `export default { scheduled }` never fires. Trying to
-register a cron trigger on the main worker is therefore not possible.
-
-`scheduler-worker/` is a deliberately tiny, framework-free Worker that:
-
-1. is triggered by a **platform-native** Cloudflare Cron Trigger (`* * * * *`),
-2. calls the main worker over a **Service Binding** (`MAIN` → service `webwatch`), which means no
-   public URL and no public egress path is involved,
-3. authenticates with a shared secret header `x-webwatch-cron`.
-
-This keeps the monitor driver independent of framework internals and of isolate warm-up.
-
-### Service bindings vs. public URLs
-
-`scheduler-worker/wrangler.jsonc` sets `TARGET_URL` to `https://webwatch/api/public/cron/run`.
-The hostname `webwatch` here is the **service-binding hostname**, not a `workers.dev` domain.
-Service bindings bypass public DNS, so the guarded endpoint is never exposed to the open internet
-via the scheduler path (it remains reachable on its public URL, which is why the secret check
-still exists).
+**Why there is no scheduler anymore.** The old uptime feature required a cron a minute, which
+the Nitro `cloudflare-module` preset cannot host (it swallows the `scheduled` event), so a
+separate `webwatch-scheduler` Worker existed. With uptime monitoring removed there is nothing to
+schedule: ingestion, alerting, and verification are all request-driven. The scheduler worker and
+`cron/run` route were deleted, and `wrangler.jsonc` has `"triggers": {}`.
 
 ---
 
 ## 3. Component Breakdown
 
-### 3.1 `src/routes/` — HTTP surface
-
-TanStack Start file-based routing. Every `.tsx` file is a route; `src/routeTree.gen.ts` is
-generated and must never be hand-edited.
-
-| Path | File | Purpose |
-| --- | --- | --- |
-| `/` | `index.tsx` | Marketing landing page (parallax hero, bento features, pricing, FAQ). |
-| `/auth` | `auth.tsx` | 3-step OTP login: email → Telegram deep link → 6-digit code. |
-| `/docs` | `docs.tsx` | In-app documentation site (7 sections, scroll-spy sidebar). |
-| `/status` | `status.tsx` | Public status page, polls `/api/system-status` every 60 s. |
-| `/dashboard` | `_authenticated/dashboard.tsx` | Overview: stat cards, top exceptions, active incidents. |
-| `/monitors` | `_authenticated/monitors.tsx` | Site CRUD grid, create/verify/pause/delete. |
-| `/apm` | `_authenticated/apm.tsx` | APM event stream across all sites. |
-| `/incidents` | `_authenticated/incidents.tsx` | Incident history with resolved/ongoing state. |
-| `/sites/$id` | `_authenticated/sites.$id.tsx` | Detail view: uptime charts, settings, API keys, SDK install, logs. |
-
-### 3.2 `src/lib/` — server logic
-
-| Module | Responsibility |
-| --- | --- |
-| `wrangler-env.ts` | Sole accessor for the D1 binding and Telegram secrets. Exports `db()`, `getAppEnv()`, `setAppEnv()`, and the `AppEnv` type. |
-| `auth.server.ts` | Primitive auth primitives: OTP issue/verify, session issue/destroy, cookie helpers, SHA-256 hashing, `ensureUser`. |
-| `auth-flows.server.ts` | HTTP-shaped auth flows (`requestOtp`, `linkStatus`, `verifyOtpLogin`, `currentUser`, `logout`). |
-| `sites-api.server.ts` | Site CRUD + domain verification. Contains the SSRF guard in `normalizeUrl()`. |
-| `monitor-core.ts` | **Pure** monitoring state machine: `evaluateStatus`, `isInCooldown`, `shouldWarnSsl`. No I/O — this is what unit tests cover. |
-| `monitor.server.ts` | Monitoring engine: HTTP probe, SSL inspection, incident lifecycle, Telegram dispatch, retention purge. |
-| `telegram.server.ts` | Telegram transport (`sendTelegram`) and all message formatters. |
-| `bot.server.ts` | Telegram command dispatcher (`handleTelegramUpdate`). |
-| `error-capture.ts` | Monkey-patches `console.error` to record and expand the last thrown error out-of-band. |
-| `error-page.ts` | Renders the standalone HTML fallback page for catastrophic SSR failures. |
-| `api.ts` | Typed client-side fetch helper (`api<T>`) used by React Query hooks. |
-| `utils.ts` | `cn()` — `clsx` + `tailwind-merge` class combiner. |
-
-**Naming convention:** modules containing server-only code are suffixed `.server.ts`. The ESLint
-config bans importing Next.js's `server-only` package and tells you to use this convention instead.
-
-### 3.3 `src/components/`
-
-- `app/` — authenticated shell: `app-shell`, `app-sidebar`, `page-header`, `profile-dropdown`,
-  `site-card`, `stat-card`, `status-badge`.
-- `marketing/` — landing-page blocks: `bento-features`, `status-board`, `telegram-alerts`.
-- `ui/` — 53 shadcn/ui primitives (Radix + CVA + Tailwind). Generated by the shadcn CLI; do not
-  hand-edit unless you intend to diverge from upstream.
-
-### 3.4 `scheduler-worker/`
-
-| File | Purpose |
-| --- | --- |
-| `wrangler.jsonc` | Cron `* * * * *`, var `TARGET_URL`, service binding `MAIN`. |
-| `src/index.ts` | `scheduled()` handler → `env.MAIN.fetch(TARGET_URL)` inside `ctx.waitUntil`. |
-
-### 3.5 `packages/webwatch-sdk/`
-
-A hand-written, un-bundled ES module published under the name `@webwatch/sdk`. It is **not** a
-workspace member and is not referenced by the root `package.json`; it is the source of truth for
-the npm distribution, while the CDN build served from `/api/public/sdk` is a separate hand-written
-copy (see [Known Gaps](#18-known-gaps--technical-debt)).
+| Component         | Location                               | Responsibility                                                      |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------- |
+| Routes (pages)    | `src/routes/*.tsx`, `_authenticated/*` | UI pages; file-based routing via TanStack Router                    |
+| Routes (API)      | `src/routes/api/**`                    | Thin HTTP verb wiring to lib functions                              |
+| Site/domain logic | `src/lib/sites-api.server.ts`          | Site CRUD, URL normalization, SSRF guard, verification              |
+| APM ingest        | `src/routes/api/ingest.ts`             | Public endpoint; auth via `api_keys`; batch insert; Telegram alert  |
+| Auth flows        | `src/lib/auth-flows.server.ts`         | HTTP-shaped operations for OTP login/link/logout and `/api/auth/*`  |
+| Auth primitives   | `src/lib/auth.server.ts`               | Sessions, OTP codes, links, `ensureUser`, `newId`, `sha256Hex`      |
+| Telegram          | `src/lib/telegram.server.ts`           | `sendTelegram`, `botUsername`, `escapeHtml`, message formatters     |
+| Bot dispatcher    | `src/lib/bot.server.ts`                | `/start` linking, site commands, its own SSRF guard                 |
+| Binding access    | `src/lib/wrangler-env.ts`              | Single accessor for the Worker env (D1 + secrets)                   |
+| Error pipeline    | `src/lib/error-capture.ts`             | Expands `console.error` arguments into full messages for Nitro logs |
+| SDK (npm)         | `packages/webwatch-sdk/`               | `@webwatch/sdk` source, build, tests                                |
+| SDK (CDN build)   | `src/routes/api/public/sdk.ts`         | ES-module string served at `GET /api/public/sdk`                    |
+| Migrations        | `migrations/d1/0001..0007`             | Schema evolution; 0007 removes the uptime surface                   |
 
 ---
 
 ## 4. Build & Runtime Pipeline
 
-### 4.1 Toolchain
-
-| Concern | Choice |
-| --- | --- |
-| Package manager | Bun (`bunfig.toml`, text lockfile `bun.lock`) |
-| Bundler | Vite 8 + `@tanstack/react-start` plugin + Nitro 3 (`cloudflare-module` preset) |
-| UI | React 19, Tailwind CSS v4 (`@tailwindcss/vite`), shadcn/ui, Radix, Framer Motion, Recharts |
-| Server | TanStack Start SSR route handlers on h3/Nitro |
-| Storage | Cloudflare D1 (SQLite) via `nodejs_compat` |
-| Test | Vitest (`src/**/*.test.ts`, node environment) |
-| Lint | ESLint 9 flat config + typescript-eslint + react-hooks + Prettier |
-
-`vite.config.ts` delegates to the shared `@lovable.dev/vite-tanstack-config` preset, which already
-registers the TanStack devtools plugin, `tanstackStart`, React, Tailwind, tsconfig paths, the
-Nitro build (cloudflare target), `VITE_*` env injection, the `@` path alias, React/TanStack
-deduplication, error-logger plugins, and dev-server sandbox detection. **Do not re-add those
-plugins manually** — duplicate registrations break the app.
-
-### 4.2 Server entry chain
-
-```
-Cloudflare fetch(request, env, ctx)
-  └─ src/server.ts            → setAppEnv(env); globalThis.__env__ = env
-       └─ @tanstack/react-start/server-entry
-            └─ h3 app
-                 ├─ Nitro plugin server/plugins/env.ts  → globalThis.__env__ = event.context.cloudflare.env
-                 └─ src/start.ts requestMiddleware
-                      ├─ errorMiddleware  → unhandled throw ⇒ HTML error page
-                      └─ csrfMiddleware   → guards `serverFn` handlers
-            └─ response → normalizeCatastrophicSsrResponse()
-```
-
-### 4.3 `normalizeCatastrophicSsrResponse`
-
-h3 does not propagate exceptions thrown inside a handler. It converts them into a plain `500`
-response whose body is `{"unhandled":true,"message":"HTTPError"}` — a JSON payload with no stack
-and no `cause`. A `try/catch` around the handler never sees it.
-
-`src/server.ts` therefore inspects any `5xx` JSON response for that exact shape and replaces it with
-the HTML fallback page from `error-page.ts`. To recover the original stack for the log pipeline,
-`error-capture.ts` monkey-patches `console.error`, records the last `Error` instance it saw, and
-stores it for **5 seconds** (`consumeLastCapturedError()`). The captured error's message, stack, and
-full `cause` chain (max depth 5, truncated at 8 000 characters) are written to the log before the
-HTML page is returned.
-
-### 4.4 Build output and Worker packaging
-
-`bun run build` produces:
-
-```
-.output/server/index.mjs    # Worker entry (Nitro)
-.output/public/             # static assets → ASSETS binding
-```
-
-`wrangler.jsonc` uses `"no_bundle": true` (the Nitro output is already bundled) plus an ESModule
-rule for `**/*.mjs` and `**/*.js`.
+- `bun run build` → Vite → Nitro build into `.output/`; Nitro preset is
+  `cloudflare-module` (`vite.config.ts`).
+- `wrangler.jsonc` deploys `.output/server/index.mjs` with `no_bundle: true` (the bundle is
+  already produced by Nitro), `nodejs_compat`, an `ASSETS` binding pointing at `.output/public`,
+  and the D1 database `webwatch` bound as `DB`.
+- `bunx tsc --noEmit` (root config) checks `src/` only. The SDK package has its own tsconfig
+  (see §13.6). ESLint flat config covers the whole repo including `packages/`.
+- `src/routeTree.gen.ts` is generated by TanStack Router — never hand-edit.
 
 ---
 
 ## 5. Environment & Binding Resolution
 
-TanStack Start route handlers do not receive the Worker `env` object as an argument, but the
-bindings are stable for the lifetime of a Worker isolate. WebWatch captures them once and
-re-exposes them through a single module.
+TanStack Start route handlers never receive the Worker `env` directly. The entry module captures
+it once per isolate and `src/lib/wrangler-env.ts` re-exposes it:
 
-**`src/lib/wrangler-env.ts` resolution order** (`getAppEnv()`):
+```
+setAppEnv(env)            → snapshot captured at startup
+getAppEnv()               → snapshot | request runtime cloudflare env | globalThis.__env__
+db()                      → getAppEnv().DB
+```
 
-1. `currentEnv` — the value cached by `setAppEnv()` (set on every request by `src/server.ts`).
-2. `getRequest().runtime.cloudflare.env`, then `getRequest().cf.env`.
-3. `globalThis.__env__` — set by the Nitro plugin `server/plugins/env.ts`.
-4. Otherwise it throws a descriptive error telling the developer to run
-   `bun run build && bunx wrangler dev` (a bare `vite dev` cannot inject D1 bindings).
-
-**Rule:** never touch `env` directly. Import `db()` from `@/lib/wrangler-env` and read secrets via
-`getAppEnv()`. This keeps the binding access in exactly one place and makes the local-dev failure
-mode explicit.
-
-### Secrets
-
-| Secret | Worker | Purpose |
-| --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | `webwatch` | Bot API bearer token for `sendMessage`. |
-| `TELEGRAM_BOT_USERNAME` | `webwatch` | Username without `@`, used to build `t.me/<bot>?start=<token>` deep links. |
-| `TELEGRAM_WEBHOOK_SECRET` | `webwatch` | Shared secret guarding the Telegram webhook **and** the manual cron endpoint. |
-| `CRON_SECRET` | `webwatch-scheduler` | Value sent as `x-webwatch-cron`. **Must equal `TELEGRAM_WEBHOOK_SECRET`.** |
-
-The reuse of one secret for three purposes is a simplification, not a best practice. See
-[Known Gaps](#18-known-gaps--technical-debt).
+`AppEnv` fields: `DB` (required), `TELEGRAM_BOT_TOKEN?`, `TELEGRAM_BOT_USERNAME?`,
+`TELEGRAM_WEBHOOK_SECRET?`. Calling `getAppEnv()` without any binding source throws a
+descriptive error — the intended message when running `bun run dev`, which cannot inject D1.
 
 ---
 
 ## 6. Data Model (Cloudflare D1)
 
-All timestamps are stored as **ISO-8601 UTC strings** produced by
-`strftime('%Y-%m-%dT%H:%M:%fZ','now')`. Comparisons are therefore lexicographic and index-friendly.
+Timestamps are ISO-8601 UTC strings, defaulted by SQLite:
+`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`. IDs (except `otp_codes.id`) are
+`crypto.randomUUID()` strings generated in `newId()`.
 
-### 6.1 Entity relationships
+### 6.1 `users`
 
-```
-users ─┬─< sessions          (token_hash PK)
-       ├─< sites ─┬─< checks          (ON DELETE CASCADE)
-       │          ├─< incidents       (ON DELETE CASCADE)
-       │          └─< api_keys        (ON DELETE CASCADE)
-       │             └─< apm_events    (ON DELETE CASCADE)
-       └─< telegram_links            (email-keyed, not FK-linked)
+| Column        | Type | Notes                     |
+| ------------- | ---- | ------------------------- |
+| `id`          | TEXT | PK (UUID)                 |
+| `email`       | TEXT | NOT NULL UNIQUE           |
+| `chat_id`     | TEXT | Telegram chat once linked |
+| `tg_username` | TEXT | Display name              |
+| `created_at`  | TEXT |                           |
 
-otp_codes   (standalone, email-keyed)
-```
+### 6.2 `sessions`
 
-### 6.2 `users`
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT | PK, `crypto.randomUUID()` |
-| `email` | TEXT | NOT NULL, UNIQUE, lower-cased at write time |
-| `chat_id` | TEXT | Telegram chat id, nullable until linked |
-| `tg_username` | TEXT | Telegram @username, nullable |
-| `created_at` | TEXT | NOT NULL, defaults to now |
-
-### 6.3 `sessions`
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `token_hash` | TEXT | PK — SHA-256 hex of the cookie token. The raw token is never stored. |
-| `user_id` | TEXT | NOT NULL → `users(id)` ON DELETE CASCADE |
-| `expires_at` | TEXT | NOT NULL — issue time + 30 days |
-| `created_at` | TEXT | NOT NULL |
+| Column       | Type | Notes                                                     |
+| ------------ | ---- | --------------------------------------------------------- |
+| `token_hash` | TEXT | PK — SHA-256 of the 32-byte session token (raw in cookie) |
+| `user_id`    | TEXT | FK → users ON DELETE CASCADE                              |
+| `expires_at` | TEXT | 30 days                                                   |
+| `created_at` | TEXT |                                                           |
 
 Index: `idx_sessions_user(user_id)`.
 
-### 6.4 `otp_codes`
+### 6.3 `otp_codes`
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | INTEGER | PK AUTOINCREMENT |
-| `email` | TEXT | NOT NULL |
-| `code_hash` | TEXT | NOT NULL — SHA-256 of `"<email>:<code>"`; the plaintext code is never stored |
-| `expires_at` | TEXT | NOT NULL — issue time + 5 minutes |
-| `used` | INTEGER | NOT NULL DEFAULT 0 |
-| `attempts` | INTEGER | NOT NULL DEFAULT 0 — added in `0002` |
-| `created_at` | TEXT | NOT NULL |
+| Column       | Type    | Notes                                   |
+| ------------ | ------- | --------------------------------------- |
+| `id`         | INTEGER | PK AUTOINCREMENT                        |
+| `email`      | TEXT    |                                         |
+| `code_hash`  | TEXT    | SHA-256 of "`email:code`"               |
+| `expires_at` | TEXT    | 5 minutes                               |
+| `used`       | INTEGER | 0/1                                     |
+| `attempts`   | INTEGER | failed verify attempts (migration 0002) |
+| `created_at` | TEXT    |                                         |
 
 Index: `idx_otp_email(email)`.
 
-### 6.5 `telegram_links`
+### 6.4 `telegram_links`
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `token` | TEXT | PK — 16 random bytes hex, consumed by `/start <token>` |
-| `email` | TEXT | NOT NULL |
-| `chat_id` | TEXT | nullable, filled when the user presses the deep link |
-| `tg_username` | TEXT | nullable |
-| `status` | TEXT | NOT NULL DEFAULT `'pending'` → `'linked'` |
-| `expires_at` | TEXT | NOT NULL — issue time + 10 minutes |
-| `created_at` | TEXT | NOT NULL |
+| Column        | Type | Notes                                       |
+| ------------- | ---- | ------------------------------------------- |
+| `token`       | TEXT | PK — 16 random bytes hex (`/start <token>`) |
+| `email`       | TEXT |                                             |
+| `chat_id`     | TEXT | filled when the chat completes `/start`     |
+| `tg_username` | TEXT |                                             |
+| `status`      | TEXT | `pending` → `linked`                        |
+| `expires_at`  | TEXT | 10 minutes TTL                              |
+| `created_at`  | TEXT |                                             |
 
 Index: `idx_tg_links_email(email)`.
 
-### 6.6 `sites`
+### 6.5 `sites`
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT | PK, UUID |
-| `user_id` | TEXT | NOT NULL → `users(id)` ON DELETE CASCADE |
-| `name` | TEXT | nullable — defaults to the URL hostname |
-| `url` | TEXT | NOT NULL — **globally unique** |
-| `interval_seconds` | INTEGER | NOT NULL DEFAULT 300 — 1…1440 min, stored in seconds |
-| `fail_threshold` | INTEGER | NOT NULL DEFAULT 2 — consecutive failures before `down` (1…100) |
-| `check_keyword` | TEXT | nullable — body must contain this substring |
-| `check_ssl` | INTEGER | NOT NULL DEFAULT 0 — 0/1 flag |
-| `is_active` | INTEGER | NOT NULL DEFAULT 1 — 0 = paused |
-| `current_status` | TEXT | NOT NULL DEFAULT `'unknown'` — `unknown` / `up` / `down` |
-| `consecutive_failures` | INTEGER | NOT NULL DEFAULT 0 |
-| `last_checked_at` | TEXT | nullable — drives the due-time scheduler |
-| `last_notified_at` | TEXT | nullable — drives the notification cooldown |
-| `ssl_last_warned_at` | TEXT | nullable — drives the SSL warning repeat interval |
-| `verification_token` | TEXT | nullable — added in `0003` |
-| `verification_status` | TEXT | NOT NULL DEFAULT `'verified'` — added in `0003`; new rows are inserted as `'pending'` |
-| `created_at` | TEXT | NOT NULL |
+| Column                | Type    | Notes                                                    |
+| --------------------- | ------- | -------------------------------------------------------- |
+| `id`                  | TEXT    | PK (UUID)                                                |
+| `user_id`             | TEXT    | FK → users ON DELETE CASCADE                             |
+| `name`                | TEXT    | defaults to hostname at creation                         |
+| `url`                 | TEXT    | globally unique (`idx_sites_url`, migrations 0002/0006)  |
+| `is_active`           | INTEGER | 0/1 — **APM ingest toggle** (repurposed, migration 0007) |
+| `verification_token`  | TEXT    | content that must appear in `webwatch-verify.txt`        |
+| `verification_status` | TEXT    | `pending` \| `verified` (default `pending` on new rows)  |
+| `created_at`          | TEXT    |                                                          |
 
-Indexes: `idx_sites_user(user_id)`, `idx_sites_active(is_active, last_checked_at)`,
-**`idx_sites_url` UNIQUE(url)**.
+Indexes: `idx_sites_user(user_id)`, `idx_sites_active(is_active)`.
 
-> **URL uniqueness history.** `0002` created a global unique index on `url`; `0005` replaced it with
-> a per-user index to allow the same URL on multiple accounts; `0006` restored global uniqueness.
-> The current constraint is platform-wide: **a URL can be monitored by exactly one account.** Both
-> `createSite()` and the bot's `/addsite` pre-check and surface `url_taken`.
+> The uptime columns (`interval_seconds`, `fail_threshold`, `check_keyword`, `check_ssl`,
+> `current_status`, `consecutive_failures`, `last_checked_at`, `last_notified_at`,
+> `ssl_last_warned_at`) and the `checks`/`incidents` tables were dropped by migration 0007.
 
-### 6.7 `checks`
+### 6.6 `api_keys`
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT | PK, UUID |
-| `site_id` | TEXT | NOT NULL → `sites(id)` ON DELETE CASCADE |
-| `status_code` | INTEGER | nullable — HTTP status, `NULL` on network failure |
-| `response_time_ms` | INTEGER | nullable |
-| `is_up` | INTEGER | NOT NULL — 0/1 |
-| `error_message` | TEXT | nullable — `HTTP 502`, `Timeout (>10s)`, `Keyword "x" tidak ditemukan`, … |
-| `checked_at` | TEXT | NOT NULL |
-
-Indexes: `idx_checks_site_checked(site_id, checked_at)`, `idx_checks_checked_at(checked_at)`.
-
-### 6.8 `incidents`
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT | PK, UUID |
-| `site_id` | TEXT | NOT NULL → `sites(id)` ON DELETE CASCADE |
-| `started_at` | TEXT | NOT NULL |
-| `resolved_at` | TEXT | nullable — `NULL` means the incident is still open |
-| `error_message` | TEXT | nullable |
-
-Indexes: `idx_incidents_site(site_id, started_at)`, `idx_incidents_started_at(started_at)`.
-
-### 6.9 `api_keys`
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `key` | TEXT | PK — `ww_` + 24 random bytes hex (48 hex chars) |
-| `site_id` | TEXT | NOT NULL → `sites(id)` ON DELETE CASCADE |
-| `name` | TEXT | nullable |
-| `created_at` | TEXT | NOT NULL |
+| Column       | Type | Notes                                                           |
+| ------------ | ---- | --------------------------------------------------------------- |
+| `key`        | TEXT | PK — plaintext `ww_` + 24 random bytes hex, emitted at creation |
+| `site_id`    | TEXT | FK → sites ON DELETE CASCADE                                    |
+| `name`       | TEXT | defaults to `Default Key`                                       |
+| `created_at` | TEXT |                                                                 |
 
 Index: `idx_api_keys_site(site_id)`.
 
-### 6.10 `apm_events`
+### 6.7 `apm_events`
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT | PK, UUID |
-| `site_id` | TEXT | NOT NULL → `sites(id)` ON DELETE CASCADE |
-| `environment` | TEXT | NOT NULL DEFAULT `'production'` |
-| `event_type` | TEXT | NOT NULL — `frontend_error`, `frontend_promise_error`, `backend_error`, `api_error`, `log`, … |
-| `message` | TEXT | NOT NULL |
-| `stack_trace` | TEXT | nullable |
-| `url` | TEXT | nullable |
-| `method` | TEXT | nullable |
-| `user_agent` | TEXT | nullable |
-| `created_at` | TEXT | NOT NULL |
+| Column        | Type | Notes                                                   |
+| ------------- | ---- | ------------------------------------------------------- |
+| `id`          | TEXT | PK (UUID)                                               |
+| `site_id`     | TEXT | FK → sites ON DELETE CASCADE                            |
+| `environment` | TEXT | default `production`                                    |
+| `event_type`  | TEXT | free-form (`frontend_error`, `backend_error`, `log`, …) |
+| `message`     | TEXT | NOT NULL (empty string allowed by ingest fallback)      |
+| `stack_trace` | TEXT | nullable                                                |
+| `url`         | TEXT | nullable                                                |
+| `method`      | TEXT | nullable                                                |
+| `user_agent`  | TEXT | nullable                                                |
+| `created_at`  | TEXT |                                                         |
 
-Indexes: `idx_apm_events_site_time(site_id, created_at)`, `idx_apm_events_type(site_id, event_type)`.
-
-### 6.11 Retention
-
-`purgeOldData()` (called from `runScheduledMonitor()` during the first five minutes of UTC hour 0,
-i.e. roughly once a day):
-
-| Table | Policy |
-| --- | --- |
-| `checks` | hard-deleted after **30 days** |
-| `incidents` | hard-deleted after **30 days**, **only if resolved** (`resolved_at IS NOT NULL`) |
-| `apm_events` | **never purged** by any code path |
-| `sessions` | rows are removed on logout; expired rows are not garbage-collected |
-| `otp_codes` | expired/used codes are pruned when a new code is issued |
+Indexes: `idx_apm_events_site_time(site_id, created_at)`,
+`idx_apm_events_type(site_id, event_type)`.
 
 ---
 
 ## 7. Authentication & Session Model
 
-### 7.1 The problem
+Passwordless: **email → OTP code sent to the already-linked Telegram chat.**
 
-WebWatch has no password store. A user proves ownership of an email address by proving control of
-a Telegram chat, because the OTP code is delivered over Telegram and never leaves the chat.
+### 7.1 Chat linking
 
-### 7.2 Flow
+1. `POST /api/auth/otp { email }` → `auth-flows.server.ts` calls `createLinkForEmail(email)`
+   which inserts `telegram_links { token: 16-byte hex, status: 'pending', expires: +10 min }`
+   and returns the deep link `https://t.me/<bot>/start=<token>`.
+2. The user sends `/start <token>` in Telegram. `bot.server.ts` validates the token
+   (`pending`, not expired), sets `chat_id`/`tg_username`/`status='linked'`, and calls
+   `ensureUser(email)` — creating the `users` row carrying `chat_id` when absent.
+3. `/api/auth/link-status` polls until `linked`.
 
-```
-  Browser                         WebWatch                     Telegram
-     │                               │                             │
-     │ POST /api/auth/otp {email}   │                             │
-     ├──────────────────────────────►│                             │
-     │                               │ look up users.chat_id      │
-     │                               │                             │
-     │        ┌──────────────────────┴─────────────────────┐      │
-     │        │ no chat_id yet                            │      │
-     │◄───────┤ { status:"need_link", deepLink:           │      │
-     │        │   "https://t.me/<bot>?start=<token>" }    │      │
-     │                                               user presses /start
-     │                                                  ├────►│
-     │                               ◄──────────────────────────┤
-     │                               │ telegram_links.status='linked'
-     │                               │ users row created (ensureUser)
-     │ POST /api/auth/otp {email}   │                             │
-     ├──────────────────────────────►│ 30 s resend guard passed   │
-     │                               │ generate 6-digit code      │
-     │                               │ sendMessage(code) ─────────►│
-     │◄───────┤ { status:"sent" }     │                             │
-     │                               │                             │
-     │ user reads code from chat     │                             │
-     │ POST /api/auth/verify {email, code}                        │
-     ├──────────────────────────────►│ verifyOtp → issueSession  │
-     │◄───────┤ 200 + Set-Cookie: ww_session=…; HttpOnly; Secure; SameSite=Lax
-```
+### 7.2 OTP
 
-### 7.3 OTP rules
+`POST /api/auth/otp { email }` → `createOtpForEmail(email)`:
 
-| Rule | Value | Enforced in |
-| --- | --- | --- |
-| Code length | 6 digits | `createOtpForEmail` |
-| TTL | 5 minutes | `OTP_TTL_MS` |
-| Storage | `sha256("<email>:<code>")` — plaintext never persisted | `auth.server.ts` |
-| Max simultaneously active codes per email | 3 (oldest evicted) | `OTP_MAX_ACTIVE` |
-| Max failed attempts per code | 5 → **all** codes for that email are deleted | `OTP_MAX_ATTEMPTS` |
-| Resend cooldown | 30 s → `429 rate_limited` with `retryAfter` | `OTP_RESEND_MIN_MS` |
-| Single use | successful verification marks the code used and deletes all codes for the email | `verifyOtp` |
+- 6-digit code (`getRandomValues % 1_000_000`, zero-padded).
+- Stored as `sha256Hex(email + ':' + code)`, TTL 5 minutes.
+- Purges expired/used rows; caps active codes per email at 3 (deletes the oldest).
+- Resend guard `OTP_RESEND_MIN_MS = 30 s` in the route handler.
+- Sends `formatOtpMessage(email, code)` to the linked chat.
 
-### 7.4 Session rules
+`POST /api/auth/verify { email, code }` → `verifyOtp`:
 
-| Rule | Value |
-| --- | --- |
-| Cookie name | `ww_session` |
-| Token | 32 random bytes, hex-encoded (64 chars) |
-| Storage | SHA-256 hex of the token as `sessions.token_hash` (PK) |
-| TTL | 30 days |
-| Cookie flags | `HttpOnly; Secure; SameSite=Lax; Path=/` |
-| Lookup | `sha256(cookie) → sessions JOIN users WHERE expires_at > now` |
-| Revocation | `POST /api/auth/logout` deletes the row and clears the cookie |
+- Hash-compare against unused, unexpired rows (single SQL fetch).
+- Failure bumps `attempts` for all live codes of the email; at 5 failures all codes are wiped.
+- Success marks the row `used`, deletes all codes for that email, and issues the session.
 
-`SameSite=Lax` plus `Secure` means the session cookie is not sent on cross-site POSTs. Server
-functions additionally get TanStack Start's CSRF middleware (`createCsrfMiddleware` with
-`filter: ctx => ctx.handlerType === "serverFn"`), re-declared explicitly in `src/start.ts`
-because defining that file opts out of the automatic installation.
+### 7.3 Sessions
+
+`issueSession(userId)`:
+
+- Token: 32 random bytes hex (`ww_session` cookie value, never stored raw).
+- `sessions.token_hash = sha256Hex(token)`, `expires_at = +30 days`.
+- Cookie: `ww_session=<token>; Path=/; HttpOnly; Secure; SameSite=Lax`.
+- `sessionUserFromRequest(request)` re-hashes the cookie token and joins
+  `sessions × users` with `expires_at > now`, returning `{ id, email, chat_id, tg_username }`.
+- `requireUser(request)` is the alias used by every authenticated route.
+- `destroySession` deletes by token hash; `clearSessionCookie` expires the cookie.
 
 ---
 
 ## 8. Site Lifecycle & Domain Verification
 
-```
-   createSite()
-       │
-       ├─ normalizeUrl(raw) ───► null  ⇒ 400 url_invalid
-       │     • prepends https:// when the scheme is missing
-       │     • SSRF guard (see §17.3)
-       │     • requires a dot in the hostname
-       │
-       ├─ SELECT id FROM sites WHERE url = ? ──► found ⇒ 409 url_taken
-       │
-       └─ INSERT sites (…, verification_token = uuid, verification_status = 'pending')
-              │
-              ▼
-        ┌──────────────────────────┐
-        │  pending: APM ingest is  │  POST /api/ingest ⇒ 403 site_not_verified
-        │  rejected for this site  │
-        └──────────────────────────┘
-              │  user hosts /webwatch-verify.txt containing the token
-              ▼
-        POST /api/sites/verify
-              │
-              ├─ GET <site.url>/webwatch-verify.txt
-              │    UA: WebWatch-Verifier/1.0 · timeout 10 s
-              │
-              ├─ body contains verification_token ⇒ UPDATE verification_status='verified'
-              └─ else ⇒ 400 token_mismatch
-```
+### 8.1 Creation
 
-**Verification error codes:** `no_token`, `file_not_found`, `token_mismatch`, `network_error`.
+Two entry points share the same rules:
 
-**Why verification exists:** it proves the user controls the domain before the platform will accept
-telemetry attributed to it. Without it, anyone could attach a victim's domain to their account and
-use the victim's traffic to exhaust the ingestion quota.
+- `POST /api/sites { url }` (dashboard), or bot `/addsite <url>`.
 
-Note that uptime monitoring itself is **not** gated on verification — only APM ingestion is.
+`normalizeUrl` / bot URL parser:
+
+- Accepts with or without scheme (`https://` implied), lowercases host, requires a dot.
+- SSRF blocklist on the hostname string: `localhost`, `*.local`, `*.internal`, `127.0.0.0/8`,
+  `10.0.0.0/8`, `192.168.0.0/16`, `169.254.0.0/16`, `172.16..172.31`, `::1`/`fc00:`/`fe80:`.
+- **Global** uniqueness on `sites.url` (a monitored origin belongs to exactly one account);
+  uniqueness violations return `url_taken` (HTTP 409) / a bot inline message.
+- New rows: `name = hostname`, `verification_token = newId()`, `verification_status = 'pending'`.
+
+### 8.2 Verification
+
+`POST /api/sites/verify { id }` (owner-scoped):
+
+1. Already `verified` → `{ ok: true, status: "verified" }` (idempotent).
+2. Fetches `GET https://<site.url>/webwatch-verify.txt` with a 10-second abort timeout and
+   `User-Agent: WebWatch-Verifier/1.0`.
+3. If the body **contains** the verification token → `verification_status = 'verified'`.
+4. Errors: `not_found`, `no_token`, `file_not_found`, `token_mismatch`, `network_error`,
+   `server_error`.
+
+The verification flow is the gate for ingestion (§9). No pause/probe semantics are attached to
+sites anymore; `is_active` purely toggles ingest acceptance.
+
+### 8.3 API keys
+
+`src/routes/api/sites/keys.ts` (thin file, inlined logic):
+
+- `GET /api/sites/keys?siteId=` — full keys of the site (owner-scoped; keys are plaintext).
+- `POST /api/sites/keys { siteId, name? }` — `ww_` + `crypto.randomBytes(24).toString("hex")`,
+  stored plaintext, returned once in the response body.
 
 ---
 
 ## 9. APM Ingestion Protocol
 
-### 9.1 Request
+`POST /api/ingest` — public, CORS `*` (browser SDKs post from customer origins;
+`OPTIONS` preflight is handled explicitly).
 
-```http
-POST /api/ingest HTTP/1.1
-Authorization: Bearer ww_<48 hex chars>
-Content-Type: application/json
-Origin: https://customer.example   # any origin; CORS is permissive by design
+### 9.1 Authentication
+
+```
+Authorization: Bearer ww_…
 ```
 
-```jsonc
+- Missing header → `missing_token` (401).
+- `SELECT * FROM api_keys k JOIN sites s ON ... WHERE k.key = ?` — unknown key →
+  `invalid_key` (401).
+- `sites.verification_status !== 'verified'` → `site_not_verified` (403).
+- `sites.is_active = 0` → ingestion rejected (APM toggle).
+
+### 9.2 Payload
+
+```json
 {
   "events": [
     {
-      "type": "frontend_error",        // required-ish; defaults to "log"
-      "message": "TypeError: x is not a function",
-      "stack_trace": "TypeError: x is not a function\n    at ...",
-      "url": "https://customer.example/checkout",
-      "method": "GET",
-      "environment": "production",     // defaults to "production"
-      "user_agent": "Mozilla/5.0 ..."  // accepted but not populated by the current SDK
+      "type": "backend_error",
+      "message": "Payment gateway timeout",
+      "environment": "production",
+      "stack_trace": "TypeError: ...\n    at ...",
+      "url": "/api/pay",
+      "method": "POST",
+      "user_agent": "webwatch-sdk/0.1.0 (node)"
     }
   ]
 }
 ```
 
-### 9.2 Processing
+- `events` array required → else `invalid_payload` (400).
+- Per-event fallbacks: `environment ?? "production"`, `type ?? "log"`, `message ?? ""`,
+  `stack_trace/url/method/user_agent ?? null`.
 
-1. **Auth.** `Authorization` must start with `Bearer ` → otherwise `401 missing_token`.
-2. **Key lookup.** One joined query resolves `api_keys → sites → users` and simultaneously
-   retrieves `sites.verification_status` and `users.chat_id` → otherwise `401 invalid_key`.
-3. **Verification gate.** `sites.verification_status !== 'verified'` → `403 site_not_verified`.
-4. **Payload check.** `body.events` must be an array → otherwise `400 invalid_payload`.
-5. **Batch insert.** Events are bound into prepared statements and flushed through
-   `db().batch()` in chunks of **50** (D1's practical batch limit).
-6. **Alert.** If the site owner has a linked Telegram chat, the **first** event whose `type`
-   contains `"error"` (case-insensitive) produces one `🚨 APM ALERT` message. It is awaited so the
-   serverless runtime cannot cancel the in-flight request. Only one alert per batch — the rest of
-   the batch is recorded silently.
-7. **Response.** `200 { "ok": true, "ingested": <n> }`.
+### 9.3 Write path
 
-Malformed JSON or an insert failure produces `400 bad_request`.
+A single prepared `INSERT INTO apm_events (...)` is reused per event via `.bind(...)`, the D1
+batch is executed in slices of **50** with `db().batch(...)`.
 
-### 9.3 CORS
+Success: `{ ok: true, ingested: <n> }`.
 
-`Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: POST, OPTIONS`,
-`Access-Control-Allow-Headers: Content-Type, Authorization`, and a preflight
-(`OPTIONS` → `204`) with `Access-Control-Max-Age: 86400`. The endpoint is intentionally reachable
-from any origin because browser SDKs post from the customer's own domain.
+### 9.4 Telegram alert
 
-### 9.4 SDK contract
+After the insert, if the site owner has a `chat_id` and **any** event in the batch has a `type`
+containing `error` (case-insensitive), `formatApmErrorMessage` renders and `sendTelegram` is
+**awaited**. Only the **first** such event is alerted — one message per batch, no cooldown
+period.
 
-The browser SDK is served from `GET /api/public/sdk` with
-`Content-Type: application/javascript; charset=utf-8`, `Cache-Control: public, max-age=3600`, and
-`Access-Control-Allow-Origin: *`.
+### 9.5 Error codes
 
-```js
-import { WebWatch } from "https://webwatch.example/api/public/sdk";
-
-WebWatch.init("<API_KEY>", "https://webwatch.example/api/ingest");
-```
-
-| Method | Behaviour |
-| --- | --- |
-| `init(key, endpoint = "/api/ingest")` | Stores the key and the endpoint. Registers a `window.onerror` listener → captures `frontend_error`, and an `unhandledrejection` listener → captures `frontend_promise_error`. |
-| `capture(type, message, stackTrace, url, method)` | `POST`s a single-event batch to the endpoint. No-ops when no key is set. Swallows every failure into `console.error`. |
-| `expressErrorHandler()` | Returns an Express `(err, req, res, next)` middleware that captures `backend_error` (with `req.originalUrl` / `req.method`) and then calls `next(err)`. |
-
-Endpoint resolution: if the endpoint starts with `http` it is used verbatim; otherwise it is
-resolved against `window.location.origin` (falling back to `http://localhost:3000` on the server),
-which makes same-origin and self-hosted deployments work without configuration.
-
-Environment detection is `process.env.NODE_ENV` when `process` is defined, otherwise
-`"production"`.
+| Code                | HTTP | Cause                                                                          |
+| ------------------- | ---- | ------------------------------------------------------------------------------ |
+| `missing_token`     | 401  | No `Authorization` header                                                      |
+| `invalid_key`       | 401  | Key not in `api_keys`                                                          |
+| `site_not_verified` | 403  | Verification gate                                                              |
+| `invalid_payload`   | 400  | `events` missing/not array                                                     |
+| `bad_request`       | 400  | Any exception inside the POST body path — _including_ D1 failures (§19 gap G1) |
 
 ---
 
-## 10. Monitoring Engine
+## 10. Notification Model
 
-### 10.1 Cycle
+`src/lib/telegram.server.ts` exposes:
 
-```
-cron (every minute) → POST /api/public/cron/run → runScheduledMonitor()
-   ├─ runDueChecks()
-   │    ├─ SELECT … FROM sites WHERE is_active = 1 ORDER BY last_checked_at ASC LIMIT 200
-   │    ├─ filter: due when last_checked_at is NULL or now - last_checked_at ≥ interval_seconds
-   │    └─ for each chunk of 15 (Promise.all): checkSite(site)
-   └─ if UTC hour == 0 and minute < 5 → purgeOldData()
-```
+| Function                                                                         | Used for                                                                                                    |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `sendTelegram(chatId, text)`                                                     | `POST api.telegram.org/bot<token>/sendMessage`, `parse_mode=HTML`, `disable_web_page_preview`, logs non-2xx |
+| `escapeHtml(value)`                                                              | Mandatory wrapper for every interpolated value                                                              |
+| `formatOtpMessage(email, code)`                                                  | 🔐 Kode masuk WebWatch (uses the raw 6-digit code in `<code>`)                                              |
+| `formatApmErrorMessage({label, url, environment, eventType, message, endpoint})` | 🚨 APM ALERT — one per failing batch                                                                        |
+| `botUsername()`                                                                  | `TELEGRAM_BOT_USERNAME` env/var, `@` stripped, used for deep links                                          |
 
-Sites are ordered by `last_checked_at ASC` so that the least-recently-checked sites are served
-first, and the 200-site cap guarantees that no site is starved indefinitely.
-
-### 10.2 Probe
-
-`probe(url, keyword)` issues a `GET` with:
-
-| Setting | Value |
-| --- | --- |
-| Method | `GET` |
-| Redirects | `follow` |
-| User-Agent | `WebWatch/1.0 (+uptime monitor)` |
-| Timeout | 10 s (`AbortController`) |
-
-Outcome rules:
-
-| Condition | `is_up` | `error_message` |
-| --- | --- | --- |
-| 2xx and (no keyword or keyword present) | 1 | `NULL` |
-| Non-2xx | 0 | `HTTP <status>` |
-| 2xx but keyword absent | 0 | `Keyword "<kw>" tidak ditemukan` |
-| Abort after 10 s | 0 | `Timeout (>10s)` |
-| Other network error | 0 | the underlying error message |
-
-### 10.3 SSL inspection
-
-When `check_ssl = 1`, `checkSslExpiry()` opens a `node:tls` connection
-(`rejectUnauthorized: false`, `servername` = host, port 443 by default) with a 5 s timeout and
-reads `getPeerCertificate().valid_to`.
-
-- Returns the number of days remaining, or `null` if the runtime cannot do TLS or the handshake
-  failed. **`null` is a skip, never a failure.**
-- If the site is otherwise up but the certificate has expired (`daysLeft <= 0`), the site is
-  recorded as **down** with `error_message = "Sertifikat SSL sudah kedaluwarsa"`.
-
-### 10.4 State machine
-
-`evaluateStatus()` in `monitor-core.ts` is pure and fully unit-tested:
-
-```
-input:  currentStatus, isUp, consecutiveFailures, failThreshold
-output: { status, consecutiveFailures, becameDown, becameUp }
-
-failures = isUp ? 0 : consecutiveFailures + 1
-
-if (!isUp && failures >= failThreshold && currentStatus !== "down")
-        status = "down", becameDown = true
-else if (isUp)
-        status = "up", becameUp = (currentStatus === "down")
-```
-
-Transition table:
-
-| From | Probe | Threshold | To | Flags |
-| --- | --- | --- | --- | --- |
-| `unknown` | up | — | `up` | — (no incident is opened) |
-| `unknown` | down | not reached | `unknown` | — |
-| `unknown` | down | reached | `down` | `becameDown` → incident opened |
-| `up` | down | not reached | `up` | — |
-| `up` | down | reached | `down` | `becameDown` → incident opened |
-| `down` | down | — | `down` | — (no duplicate incident) |
-| `down` | up | — | `up` | `becameUp` → incident closed |
-
-Consecutive failures reset to 0 on any successful probe. Pausing a site (`is_active = 0`) also
-resets the counter.
-
-### 10.5 Per-check sequence (`checkSite`)
-
-```
- 1. probe → isUp, statusCode, responseTimeMs, errorMessage
- 2. if check_ssl → checkSslExpiry → possibly downgrade to down
- 3. INSERT INTO checks (...)
- 4. evaluation = evaluateStatus(...)
- 5. cooldownActive = isInCooldown(site.last_notified_at, now, 10 min)
- 6. if becameDown:
-       INSERT INTO incidents (site_id, error_message)
-       if !cooldownActive && chatId → sendTelegram(DOWN)
- 7. else if becameUp:
-       SELECT latest unresolved incident
-       downtime = humanDuration(now - started_at)
-       UPDATE incidents SET resolved_at = now
-       if !cooldownActive && chatId → sendTelegram(RECOVERED)
- 8. if isUp && shouldWarnSsl(...) && chatId → sendTelegram(SSL WARNING)
- 9. UPDATE sites SET current_status, consecutive_failures, last_checked_at,
-                     last_notified_at = COALESCE(?, last_notified_at),
-                     ssl_last_warned_at = COALESCE(?, ssl_last_warned_at)
-```
-
-`last_notified_at` and `ssl_last_warned_at` are only overwritten when a message was actually sent,
-so the cooldown window measures real notifications rather than check attempts.
+No DOWN/RECOVERED/SSL-expiry formatters exist anymore — those belonged to the removed uptime
+product.
 
 ---
 
-## 11. Notification Model
+## 11. Telegram Bot Interface
 
-All notifications are Telegram messages sent through `https://api.telegram.org/bot<token>/sendMessage`
-with `parse_mode: HTML` and `disable_web_page_preview: true`. All dynamic values are escaped with
-`escapeHtml()` (`&`, `<`, `>`).
+`POST /api/public/telegram/webhook`:
 
-| Trigger | Template | Icon |
-| --- | --- | --- |
-| Site transitioned to `down` | `formatDownMessage` | 🔴 `DOWN` — label, URL, error, failure count, UTC time |
-| Site recovered | `formatRecoveryMessage` | 🟢 `RECOVERED` — label, URL, downtime duration, UTC time |
-| Certificate expiring in ≤ 7 days | `formatSslWarningMessage` | ⚠️ `SSL CERTIFICATE` — label, URL, days left, UTC time |
-| OTP code delivery | `formatOtpMessage` | 🔐 `Kode masuk WebWatch` — 6-digit code, 5-minute warning |
-| First error in an ingest batch | `formatApmErrorMessage` | 🚨 `APM ALERT` — label, URL, type + environment, message, endpoint |
+1. Compares `x-telegram-bot-api-secret-token` to `TELEGRAM_WEBHOOK_SECRET` with a timing-safe
+   SHA-256 digest comparison; failures → 401. Missing secret config → 500 (`"No secret"`).
+2. `bot.server.ts#handleTelegramUpdate` parses only `message.text` commands.
+3. Update handling errors are logged and swallowed — the endpoint still answers
+   `{ ok: true }` so Telegram does not retry-run the update.
 
-### 11.1 Anti-spam rules
+Commands (from `HELP`, Indonesian copy):
 
-| Rule | Window | Mechanism |
-| --- | --- | --- |
-| DOWN / RECOVERED cooldown | **10 minutes** | `isInCooldown(site.last_notified_at, …)` suppresses any notification sent less than 10 minutes after the previous one. |
-| SSL warning threshold | ≤ **7 days** remaining | `shouldWarnSsl` |
-| SSL warning repeat | **24 hours** | `ssl_last_warned_at` |
-| APM alert | one per **batch** | only the first `*error*` event in the payload is announced |
-| Notified only to the owner's chat | — | `users.chat_id`; no notification is sent if Telegram is not linked |
+| Command            | Behaviour                                                             |
+| ------------------ | --------------------------------------------------------------------- |
+| `/start <token>`   | Links chat (§7.1); bare `/start` answers with onboarding text         |
+| `/help`            | Command list                                                          |
+| `/addsite <url>`   | Same normalization + SSRF blocklist as the API; global URL uniqueness |
+| `/listsite`        | Lines with status icons: `✅ verified`, `⏳ pending`, `⏸️ inactive`   |
+| `/removesite <id>` | Deletes the site (cascade removes `api_keys`, `apm_events`)           |
+| `/pause <id>`      | `is_active = 0` — ingest paused                                       |
+| `/resume <id>`     | `is_active = 1`                                                       |
 
-`humanDuration()` renders downtime in Indonesian: `"X jam Y menit"`, minimum `"1 menit"`.
-
----
-
-## 12. Telegram Bot Interface
-
-Webhook endpoint: `POST /api/public/telegram/webhook`, guarded by the
-`x-telegram-bot-api-secret-token` header, compared with `timingSafeEqual` over SHA-256 digests.
-
-Commands are parsed as `/command@botname`, so the bot works in group chats.
-
-| Command | Behaviour |
-| --- | --- |
-| `/start` | Without an argument: reports whether the chat is linked and prints the help text. With `<token>`: consumes the pending `telegram_links` token, marks it `linked`, and calls `ensureUser(email)`. |
-| `/help` | Prints the command list. |
-| `/addsite <url> [interval_minutes]` | Adds a site. Applies the same SSRF guard as the dashboard. Rejects URLs already monitored platform-wide. |
-| `/listsite` / `/status` | Lists the caller's sites with status icon, short id, interval, and URL. |
-| `/removesite <id>` | Deletes the site. |
-| `/pause <id>` / `/resume <id>` | Toggles `is_active`; pausing also resets the failure counter. |
-| `/history <id>` | 30-day uptime percentage plus the five most recent incidents with durations. |
-
-Site references are the **first 8 characters** of the site id; the lookup is a prefix match and
-must resolve to exactly one site, otherwise the bot replies "Situs tidak ditemukan."
+`<id>` may be the first 8 chars of the UUID (`findSite` uses `id LIKE '<ref>%'`, owner-scoped,
+limit 2 to detect ambiguity).
 
 ---
 
-## 13. Public Status Page
+## 12. Public Status Page
 
-`GET /api/system-status` is public and unauthenticated.
+`GET /api/system-status` feeds `/status`:
 
-```jsonc
-{
-  "status": "operational",           // or "degraded"
-  "components": [
-    { "name": "Web Dashboard & API",       "status": "operational", "description": "…" },
-    { "name": "Uptime Monitoring Engine",  "status": "operational", "description": "…" },
-    { "name": "APM Ingestion Nodes",       "status": "operational", "description": "…" },
-    { "name": "Database & Storage",        "status": "operational", "description": "…" }
-  ],
-  "metrics": { "totalSites": 0, "apmEvents24h": 0, "checks24h": 0 }
-}
-```
-
-**Engine liveness heuristic:** the newest row in `checks` is compared against "now". If it is more
-than **10 minutes** old, the `Uptime Monitoring Engine` component is reported as `outage` and the
-platform as `degraded`. The check is a proxy for scheduler liveness — the platform cannot observe
-the scheduler directly.
-
-**Database failure:** on a D1 error the endpoint still answers `200` but with
-`status: "outage"` and every component marked `outage`/`unknown`, so the status page degrades
-gracefully instead of showing an error.
-
-The `/status` page and the floating status pill in `__root.tsx` both poll this endpoint every
-60 seconds.
+- Reads `count(*)` from `sites` and `apm_events` in the last 24 hours.
+- Returns a **static, positive** `components` list (dashboard/API, ingestion, database) plus the
+  two metrics — `status: "operational"` is not a real per-component health probe (§19 gap G5).
+- On any D1 error it answers `status: "outage"` with HTTP 200 and the error string embedded in
+  the payload.
 
 ---
 
-## 14. HTTP API Reference
+## 13. The `@webwatch/sdk` npm Package
 
-### 14.1 Public endpoints
+Source: `packages/webwatch-sdk/` — TypeScript, zero runtime dependencies, published as ESM
+(`NodeNext`), build via `bun run build:sdk` → `dist/`. Engine: Node ≥ 18 (also Bun; browser via
+bundler).
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| `GET` | `/api/public/sdk` | none | Serves the browser SDK source (`application/javascript`). |
-| `GET` | `/api/system-status` | none | Status page payload and platform metrics. |
-| `POST` | `/api/ingest` | `Authorization: Bearer <api_key>` | APM batch ingestion. |
-| `POST` | `/api/public/cron/run` | `x-webwatch-cron: <secret>` | Manual monitor trigger. |
-| `POST` | `/api/public/telegram/webhook` | `x-telegram-bot-api-secret-token: <secret>` | Telegram webhook receiver. |
-| `POST` | `/api/auth/otp` | none | Request an OTP or a Telegram deep link. |
-| `GET` | `/api/auth/link-status` | none | `?email=` → `linked` / `pending` / `expired`. |
-| `POST` | `/api/auth/verify` | none | Exchange the OTP for a session cookie. |
-| `GET` | `/api/auth/me` | session (optional) | Current user, or `{ "user": null }`. |
-| `POST` | `/api/auth/logout` | session | Destroy the session. |
+### 13.1 Configuration
 
-### 14.2 Authenticated endpoints
+| Source                             | Key            | Endpoint (`/api/ingest` appended) |
+| ---------------------------------- | -------------- | --------------------------------- |
+| `WebWatch.init(key, { endpoint })` | wins           | wins                              |
+| Env                                | `WEBWATCH_KEY` | `WEBWATCH_URL`                    |
 
-| Method | Path | Query / body | Description |
-| --- | --- | --- | --- |
-| `GET` | `/api/sites` | — | All sites owned by the caller. |
-| `POST` | `/api/sites` | `{ url, intervalMinutes?, failThreshold?, keyword?, ssl? }` | Create a site (status `pending`). |
-| `PATCH` | `/api/sites` | `{ id, patch? \| intervalMinutes?, failThreshold?, keyword?, ssl?, is_active? }` | Update settings or pause/resume. |
-| `DELETE` | `/api/sites` | `{ id }` | Delete a site (cascades). |
-| `GET` | `/api/sites/detail` | `?id=` | Site + up to 5 000 checks over 30 days + last 20 incidents. |
-| `POST` | `/api/sites/verify` | `{ id }` | Run domain verification. |
-| `GET` | `/api/sites/keys` | `?siteId=` | List API keys (never hashed). |
-| `POST` | `/api/sites/keys` | `{ siteId, name? }` | Issue a new API key; returns the plaintext once. |
-| `GET` | `/api/sites/events` | `?siteId=` | Last 100 APM events for a site. |
-| `GET` | `/api/sites/dashboard` | — | Last 15 APM events + last 15 incidents across all sites. |
+`joinEndpoint` appends `/api/ingest` to a bare base URL, leaves a URL already pointing at the
+ingest path untouched, and passes relative paths through (for inlined `import.meta.env`
+configurations). With neither key nor URL the SDK is inert and `console.warn`s **once** when
+events start arriving; it never throws into the host app.
 
-### 14.3 Error envelope
+`environment` recorded on events comes from `NODE_ENV` (fallback `production`), overridable
+per-call. `user_agent` self-reports: `webwatch-sdk/<version> (<node|bun|edge|browser>)`.
 
-All JSON API responses use `{ "error": "<machine_code>" }`. Codes in use:
-`unauthorized`, `invalid_request`, `email_invalid`, `code_invalid`, `rate_limited`,
-`url_invalid`, `url_taken`, `id_required`, `site_id_required`, `not_found`, `no_token`,
-`file_not_found`, `token_mismatch`, `network_error`, `missing_token`, `invalid_key`,
-`site_not_verified`, `invalid_payload`, `bad_request`, `server_error`, `delete_failed`.
+### 13.2 Capture surface
+
+- `capture(type, message, stackTrace?, url?, method?)` — legacy-shaped, fire-and-forget.
+- `captureError(error, { url?, method?, environment? })` — expands `Error.message/stack`, walks
+  `Error.cause` up to depth 3 appending `caused by: …`, degrades non-Errors to strings.
+- `flush()` — awaited drain of the queue.
+- Duplicate suppression: same `type + message` within a 5-second window is dropped;
+  a 1000-key map with window-based eviction.
+
+### 13.3 Batching (queue)
+
+- In-memory buffer, max **1000** events, overflow drops the **oldest** first.
+- One flush loop at a time (`inFlight` guard); each flush splices chunks of **50** (matching the
+  ingest write path) and sends until the buffer empties.
+- A `setInterval` of **5 s** carries the periodic flush; it is `unref()`-ed so the host process
+  is never kept alive by the SDK. With no config, a flush drops the buffer silently (the
+  warning happens at capture time, not at send time).
+
+### 13.4 Transport (retry)
+
+`sendEvents(endpoint, key, events)` — POST JSON with `Authorization: Bearer …`:
+
+- Retries up to 3 times with exponential backoff (0.5 s → 4 s) on **408/429/5xx and network
+  errors**.
+- **Fail fast** on 400/401/403/404 (mis. `invalid_key`, `site_not_verified`) — retrying identical
+  payloads would only hammer the host; logs one `console.error` per distinct failure class.
+- After exhausting retries the batch is dropped with a single console error.
+
+### 13.5 Auto-capture hooks
+
+`installGlobalCapture()` is idempotent and runs when both env vars are present at import time:
+
+- Node/Bun: `process.on('unhandledRejection')` → `captureError`; `process.on('uncaughtExceptionMonitor')`
+  → `captureError` **while letting the process crash naturally** (unlike `uncaughtException`,
+  which would suppress the crash).
+- Browser: `window.error` → `capture('frontend_error', …)`, `window.unhandledrejection` →
+  `captureError`, `beforeunload` → `void flush()`.
+- Known edge: a process dying from an uncaught exception may exit before the async flush
+  completes; framework middleware is the guaranteed path for those.
+
+### 13.6 Integrations & exports
+
+| Import                  | Exports                                                                                                               | Notes                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `@webwatch/sdk`         | `init`, `capture`, `captureError`, `flush`, `getRuntime`, `SDK_VERSION`, `INGEST_PATH`, integration re-exports, types | Runs `autoInit()` on import                                  |
+| `@webwatch/sdk/express` | `expressErrorMiddleware()`, `wrapAsync(handler)`                                                                      | 4-arg error middleware + async catch for Express 4           |
+| `@webwatch/sdk/hono`    | `honoOnError()`                                                                                                       | Drop-in `app.onError`; re-applies the default error Response |
+| `@webwatch/sdk/fastify` | `fastifyErrorHandler()`                                                                                               | Drop-in `setErrorHandler`                                    |
+| `@webwatch/sdk/next`    | `register()`                                                                                                          | `instrumentation.ts` hook; only hooks the Node.js runtime    |
+
+Build/type-check/tests: `bun run build:sdk`,
+`bun node_modules/typescript/lib/tsc.js -p packages/webwatch-sdk/tsconfig.json --noEmit`,
+and vitest picks up `packages/webwatch-sdk/src/*.test.ts` (§18).
+
+### 13.7 Relationship to the CDN build
+
+`/api/public/sdk` serves an inline ES module (`WebWatchClient` class with `init(key, endpoint)`,
+window listeners, an express handler, and a `fetch`-per-event `capture` — no batching, no
+retry budget). It covers the "no npm install" niche. The npm package and this script are
+**separate implementations of the same ingest contract** and can drift independently (§19 gap
+G0b). Do not let one gain features the contract does not have.
 
 ---
 
-## 15. Frontend Route Map
+## 14. API Surface & Route Map
 
-| Route | Guard | Data sources |
-| --- | --- | --- |
-| `/` | public | static marketing content |
-| `/auth` | public | `/api/auth/otp`, `/api/auth/link-status` (poll 2.5 s), `/api/auth/verify` |
-| `/docs` | public | static content |
-| `/status` | public | `/api/system-status` (poll 60 s) |
-| `/dashboard` | session | `/api/sites/dashboard` |
-| `/monitors` | session | `/api/sites` + mutations |
-| `/apm` | session | `/api/sites/dashboard` |
-| `/incidents` | session | `/api/sites/dashboard` |
-| `/sites/$id` | session | `/api/sites/detail`, `/api/sites/events`, `/api/sites/keys` |
+### 14.1 Public
 
-**Auth guard:** `src/routes/_authenticated/route.tsx` runs `ssr: false` and a `beforeLoad` that
-calls `/api/auth/me`, redirecting to `/auth` when no user is present. It also renders `AppShell`
-(sidebar + header + profile dropdown).
+| Endpoint                            | Handler notes                                       |
+| ----------------------------------- | --------------------------------------------------- |
+| `OPTIONS/POST /api/ingest`          | `src/routes/api/ingest.ts` — full logic inline (§9) |
+| `GET /api/public/sdk`               | Serves the CDN SDK module with `text/javascript`    |
+| `POST /api/public/telegram/webhook` | Secret-checked relay to `bot.server.ts` (§11)       |
+| `GET /api/system-status`            | Heuristic status + metrics (§12)                    |
 
-**Server-side data fetching** is intentionally minimal: most screens fetch from the client through
-TanStack Query so that the shell renders instantly and mutations invalidate the cache.
+### 14.2 Auth
 
-**Client helpers:** `src/lib/api.ts` (`api<T>`, `credentials: "same-origin"`, throws
-`data.error` on a non-2xx response), `src/hooks/use-current-user.ts`, `src/hooks/use-mobile.tsx`.
+| Endpoint                    | Notes                                       |
+| --------------------------- | ------------------------------------------- |
+| `POST /api/auth/otp`        | Link creation / OTP send; 30 s resend guard |
+| `POST /api/auth/verify`     | OTP check; sets `ww_session` cookie         |
+| `GET /api/auth/me`          | Current `SessionUser` or `null`             |
+| `GET /api/auth/link-status` | `pending` \| `linked` + deep link           |
+| `POST /api/auth/logout`     | Destroys session                            |
+
+### 14.3 Sites (all owner-scoped via `requireUser`)
+
+| Endpoint                                     | Semantics                                                |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `GET /api/sites`                             | Owner's sites, `ORDER BY created_at ASC`                 |
+| `POST /api/sites { url }`                    | Create; `url_taken` on global uniqueness violation       |
+| `PATCH /api/sites { id, name?, is_active? }` | Current value kept when a field is omitted               |
+| `DELETE /api/sites { id }`                   | Cascade deletes `api_keys` + `apm_events`                |
+| `GET /api/sites/detail?id=`                  | Site + last **100** events DESC                          |
+| `GET /api/sites/dashboard`                   | Last **15** events across the owner's sites (JOIN sites) |
+| `GET /api/sites/events?siteId=`              | Last **100** events of one site (ownership re-checked)   |
+| `GET /api/sites/keys?siteId=`                | Key list (§8.3)                                          |
+| `POST /api/sites/keys`                       | Creates `ww_…` key                                       |
+| `POST /api/sites/verify { id }`              | Verification probe (§8.2)                                |
+
+Every error is `{ "error": "<machine_code>" }`; every `try/catch` ends in
+`server_error` (500) unless a more specific code above is defined.
+
+---
+
+## 15. Frontend Architecture
+
+- **Public routes**: `/` (landing), `/docs`, `/status`, `/auth`.
+  `/auth` drives the linking + OTP loop entirely through the auth API and polling.
+- **Authenticated routes** (`src/routes/_authenticated/route.tsx` guards the shell):
+  `/dashboard`, `/sites/$id` (verification card, key list, event stream), `/apm` ("Log Error
+  (APM)" — cross-site event feed), `/settings`.
+- **Data access** is TanStack Query over `src/lib/api.ts#api<T>` (`credentials: "same-origin"`,
+  throws with the `data.error` string on non-2xx). Mutations invalidate the cache.
+- Sites are **added from the Telegram bot**, therefore the dashboard CTA links to `/docs`
+  instead of an add-site form.
+- Marketing copy on the landing page matches shipped behaviour only (no uptime/SSL claims).
 
 ---
 
 ## 16. Design System
 
-Tokens live in `src/styles.css` as Tailwind v4 `@theme inline` variables.
+Tokens live in `src/styles.css` as Tailwind v4 `@theme inline` variables; details in
+[`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
-| Group | Tokens |
-| --- | --- |
-| Typography | `--font-display` / `--font-sans` → Space Grotesk; `--font-mono` → IBM Plex Mono. Both loaded from Google Fonts in `__root.tsx`. |
-| Surfaces | `--background`, `--surface`, `--card`, `--popover`, `--muted` |
-| Status | `--up` (teal), `--down` (red), `--paused` (amber) — the three semantic status colours |
-| Brand | `--primary` (teal `oklch(0.58 0.12 178)`), `--secondary`, `--accent`, `--ring` |
-| Danger | `--destructive` |
-| Shape | `--radius: 0.5rem` with `--radius-sm/md/lg/xl` derived from it |
-| Elevation | `--shadow-glow` (status glow), `--shadow-panel` (card depth) |
+| Group      | Tokens                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Typography | `--font-display` / `--font-sans` → Space Grotesk; `--font-mono` → IBM Plex Mono (loaded in `__root.tsx`)                    |
+| Surfaces   | `--color-bg`, `--color-surface`, `--color-surface-muted`, `--color-card`, `--color-border`, `--color-border-strong`         |
+| Text       | `--color-text`, `--color-text-muted`, `--color-text-subtle`                                                                 |
+| Accents    | `--color-primary(-hover                                                                                                     | -subtle)`, `--color-focus`; `--color-s/w/d/i`roles for success, warning, danger, info (+their`-surface`) |
+| Status     | `--up`, `--down`, `--degraded`, `--paused` — used by the remaining site-state badges (verified, error alert, paused ingest) |
+| Charts     | `--chart-1` … `--chart-5`                                                                                                   |
+| Code       | `--code-plain`, `--code-keyword`, `--code-string`, `--code-attribute`, `--code-punctuation`                                 |
+| Shape      | `--radius-xs/sm/md/lg/xl`, `--shadow-sm/md/lg`                                                                              |
+| Containers | `--container-reading`, `--container-content`, `--container-wide`                                                            |
 
-Colour space is **OKLCH** throughout. Component styling uses `cn()` (`clsx` + `tailwind-merge`) so
-that conditional Tailwind classes resolve deterministically.
+The palette is OKLCH. Add colors as semantic tokens (never inline hex) and document the reason.
 
 ---
 
 ## 17. Security Model
 
-### 17.1 Authentication & secrets
-
-- No passwords are stored, transmitted, or recoverable.
-- Session tokens and OTP codes are hashed with SHA-256 before storage.
-- The raw session token exists only in the `HttpOnly` cookie.
-- Secrets live as Cloudflare Worker secrets, never in `vars` or in the repository.
-
-### 17.2 Tenant isolation
-
-Every authenticated query is scoped by `user_id` — both in SQL (`WHERE id = ? AND user_id = ?`)
-and by taking the owner from the session, never from the request body. A user cannot read,
-modify, or delete another account's sites, incidents, events, or API keys.
-
-There is no database-level Row-Level Security; isolation is enforced in the application layer
-only. That is adequate for a single-tenant-per-row schema on D1, but it means every new query
-must remember the `user_id` predicate.
-
-### 17.3 SSRF protection
-
-Because the platform fetches user-supplied URLs, `normalizeUrl()` (and its duplicate in
-`bot.server.ts`) rejects:
-
-- `localhost`
-- `*.local`, `*.internal`
-- `127.0.0.0/8`, `10.0.0.0/8`, `192.168.0.0/16`, `169.254.0.0/16`, `172.16.0.0/12`
-- `::1`, `fc00::`, `fe80::`
-- hostnames without a dot
-
-The guard inspects the hostname string only — it does not resolve DNS, so a hostname that resolves
-to a private address is not caught (see [Known Gaps](#18-known-gaps--technical-debt)).
-
-### 17.4 Request authentication
-
-| Surface | Mechanism |
-| --- | --- |
-| APM ingest | `Bearer` API key, looked up in `api_keys`; scoped to a single site. |
-| Cron trigger | `x-webwatch-cron` header, SHA-256 digest comparison against `TELEGRAM_WEBHOOK_SECRET`. |
-| Telegram webhook | `x-telegram-bot-api-secret-token` header, `timingSafeEqual` over SHA-256 digests. |
-| Dashboard API | `ww_session` cookie, `SameSite=Lax` + `Secure`. |
-| Server functions | TanStack Start CSRF middleware. |
-
-### 17.5 Injection
-
-All database access uses **prepared statements with bound parameters**. No SQL string
-interpolation is used anywhere.
-
-### 17.6 XSS
-
-Telegram messages are HTML-formatted, so every interpolated value passes through `escapeHtml()`.
-The SSR error page is a static string with no interpolation. The frontend renders API data through
-React, which escapes by default; no `dangerouslySetInnerHTML` is used.
-
-### 17.7 Resource limits
-
-| Limit | Value | Where |
-| --- | --- | --- |
-| Sites processed per run | 200 | `MAX_SITES_PER_RUN` |
-| Parallel probes | 15 | chunk size in `runDueChecks` |
-| Probe timeout | 10 s | `REQUEST_TIMEOUT_MS` |
-| SSL handshake timeout | 5 s | `checkSslExpiry` |
-| Verification fetch timeout | 10 s | `verifySite` |
-| Interval range | 1–1440 minutes | `clampInt` |
-| Failure threshold range | 1–100 | `clampInt` |
-| Checks returned to the client | 5 000 (30-day window) | `siteDetail` |
-| Ingest batch chunk | 50 statements | `/api/ingest` |
-| OTP active codes per email | 3 | `OTP_MAX_ACTIVE` |
-| OTP failed attempts | 5 | `OTP_MAX_ATTEMPTS` |
+| Surface          | Control                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sessions         | 32-byte random token, **SHA-256-hashed at rest**, HttpOnly + Secure + SameSite=Lax cookie, 30-day expiry enforced in SQL |
+| OTP codes        | SHA-256 of `email:code`, single-use, 5-minute TTL, ≤ 3 active per email, 5-attempt lockout, 30 s resend guard            |
+| Telegram linking | One-time 10-minute tokens consumed by `/start <token>`; linking creates the user on the spot                             |
+| Webhook          | Timing-safe comparison of the secret header (`sha256` + `timingSafeEqual`)                                               |
+| Ingest           | Bearer `ww_` key → implied site (no user input chooses the site); verification gate; `is_active` kill switch; CORS `*`   |
+| URL acceptance   | Scheme normalization + hostname best-effort SSRF blocklist (§8.1); **string-level only**, no DNS resolution (§19 gap G4) |
+| Ownership        | Every site/key/event query carries `AND user_id = ?` derived from the session, never from the body                       |
+| Secrets          | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` via `wrangler secret put`; `wrangler-env.ts` is the only reader          |
+| SQL              | Prepared statements everywhere; no string interpolation                                                                  |
 
 ---
 
-## 18. Known Gaps & Technical Debt
+## 18. Testing
 
-These are real divergences between the product surface and the implementation. They are listed so
-that nobody documents them as if they were shipped.
-
-| # | Gap | Impact | Suggested fix |
-| --- | --- | --- | --- |
-| 1 | The npm package `packages/webwatch-sdk/index.js` hardcodes `https://your-webwatch-domain.com/api/ingest` and cannot be pointed at another endpoint. It also lacks the `unhandledrejection` listener. | The npm package is unusable as shipped. | Give `init(key, endpoint)` the same signature as the CDN build, or generate the npm package from the CDN source. |
-| 2 | The npm package and the CDN build (`src/routes/api/public/sdk.ts`) are two independent copies of the same code. | They drift; the CDN build is already ahead (endpoint override, promise rejection handling, safe `process` access). | Extract one source file and serve/bundle it for both channels. |
-| 3 | `packages/webwatch-sdk` is not a workspace member and is not referenced by the root `package.json`. | It is never built, type-checked, or tested. | Either wire it into the workspace or remove it until it is publishable. |
-| 4 | `/api/ingest` has **no rate limiting**. | A single API key can insert unbounded rows. | Add a per-key token bucket persisted in D1. |
-| 5 | `apm_events` are **never purged**. | Unbounded growth in the largest table. | Extend `purgeOldData()` with a retention window for APM events. |
-| 6 | The SSRF guard is duplicated in `sites-api.server.ts` and `bot.server.ts`, and only inspects the hostname string. | Divergence risk; DNS names pointing at private IPs are not blocked. | Extract a single `assertPublicUrl()` helper and resolve the hostname before fetching. |
-| 7 | `TELEGRAM_WEBHOOK_SECRET` guards three unrelated surfaces (Telegram webhook, manual cron, scheduler). | One leaked secret disables all three. | Introduce separate `CRON_SECRET` and `TELEGRAM_WEBHOOK_SECRET` values on the main worker. |
-| 8 | `scheduler-worker/` is not listed in `tsconfig.json`'s `include`. | `bunx tsc --noEmit` does not type-check it. | Add a `tsconfig` in `scheduler-worker/` or extend the root `include`. |
-| 9 | `src/server/plugins/env.ts` is dead code — `vite.config.ts` registers `server/plugins/env.ts` (root) instead. | Confusing duplication; the root plugin does not call `setAppEnv()`. | Delete `src/server/plugins/env.ts`, or point the Nitro plugin list at it and delete the root copy. |
-| 10 | `sites.url` is globally unique across all accounts. | Two customers cannot monitor the same URL. | Make it `UNIQUE(user_id, url)` if per-account duplication is wanted (migration `0005` did this before `0006` reverted it). |
-| 11 | `sessions` rows are never garbage-collected after expiry. | Slow table growth. | Purge expired sessions in `purgeOldData()`. |
-| 12 | The platform-wide URL uniqueness plus the `url_taken` pre-check is implemented twice. | One path could miss the constraint and surface a raw DB error. | Rely on the unique index and map the constraint violation to `409 url_taken` (already partially done in `createSite`). |
-| 13 | The status page infers scheduler liveness from the newest `checks` row. | If no site is due for a check, the engine can be reported as `outage` while it is healthy. | Have the scheduler write a heartbeat row. |
-| 14 | `api_keys.key` is stored in plaintext (it is the table's primary key). | A database leak yields directly usable ingest credentials. | Store `sha256(key)` and index that. |
+- Runner: Vitest, Node environment. Include globs: `src/**/*.test.ts` **and**
+  `packages/**/src/**/*.test.ts` (the app suite and the SDK suite run together with
+  `bun run test`).
+- Test names are written in **Indonesian**, matching the existing suite style.
+- Current coverage: `src/lib/telegram-server.test.ts` (escapeHtml, OTP message, APM alert
+  format) and the SDK suite (`envconfig`, `capture`, `queue`, `transport`) — 32 tests.
+- Vitest transforms but does not type-check: run the per-area `tsc` commands from §3/§13.6.
+- There is no server-side integration test harness; D1-dependent paths are exercised through
+  `bunx wrangler dev` locally. Keep pure logic in pure modules so new logic stays unit-testable.
 
 ---
 
-## 19. Deployment Topology
+## 19. Known Gaps & Technical Debt
 
-### 19.1 Resources
+These are real divergences between the product surface and the implementation. They are listed
+so nobody documents unimplemented behaviour as shipped. Fix or re-check any item before
+relying on it.
 
-| Resource | Name | Notes |
-| --- | --- | --- |
-| Worker | `webwatch` | `wrangler.jsonc`; entry `.output/server/index.mjs`; assets binding `ASSETS`. |
-| Worker | `webwatch-scheduler` | `scheduler-worker/wrangler.jsonc`; cron `* * * * *`; service binding `MAIN`. |
-| D1 database | `webwatch` | binding `DB`; `migrations_dir: migrations/d1`; id `1e799485-7ea5-444e-9858-a54e1d476011`. |
-| Secret | `TELEGRAM_BOT_TOKEN` | main worker |
-| Secret | `TELEGRAM_BOT_USERNAME` | main worker |
-| Secret | `TELEGRAM_WEBHOOK_SECRET` | main worker |
-| Secret | `CRON_SECRET` | scheduler worker (must equal `TELEGRAM_WEBHOOK_SECRET`) |
+| #   | Gap                                                                                                            | Impact                                                                              | Suggested fix                                                                       |
+| --- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| G0  | `@webwatch/sdk` is not published to the npm registry yet                                                       | The only no-install path is the CDN build; npm instructions don't work externally   | `npm publish` from `packages/webwatch-sdk/` once the contract is stable             |
+| G0b | The CDN build (`/api/public/sdk`) and the npm SDK are two separate implementations of one contract             | They drift independently (CDN build lacks batching/retry/throttle; per-event fetch) | Generate the CDN build from the npm source (shared core + browser adapter)          |
+| G1  | `POST /api/ingest` wraps **all** DB failures in a catch-all returning `bad_request` (400)                      | Server-side faults masquerade as client faults; SDKs cannot distinguish             | Narrow the `catch` and return `server_error` (500) for storage failures             |
+| G2  | No rate limiting on `/api/ingest`                                                                              | One valid key can insert unbounded rows (cost amplification)                        | Per-key token bucket (Durable Objects or Workers Rate Limiting binding)             |
+| G3  | `apm_events` is never purged; `telegram_links`/`otp_codes` rows accumulate until ad-hoc cleanup                | Unbounded storage growth                                                            | Scheduled purge worker + retention window per `created_at` (schema already indexed) |
+| G4  | `sites.url` SSRF guard: hostname **string** only, duplicated in `sites-api.server.ts` and `bot.server.ts`      | Hostnames resolving to private IPs pass; two implementations to keep in sync        | Resolve DNS before acceptance; extract one shared guard module                      |
+| G5  | `/api/system-status` components are static "operational" entries; an outage is inferred only from a D1 failure | Public status page can claim healthy ingestion while it is degraded                 | Derive per-component health from real signals (error rates, recent ingest ages)     |
+| G6  | API keys stored **plaintext** and re-served in full by `GET /api/sites/keys`                                   | A leaked DB dump leaks usable keys; rotation is manual (create new, delete site)    | Store hashes, show the key once at creation, add rotate/revoke endpoints            |
+| G7  | `src/server/plugins/env.ts` is dead code (the registered plugin is root `server/plugins/env.ts`)               | Confusion when editing environment wiring                                           | Delete the dead file                                                                |
+| G8  | APM Telegram alerts have **no cooldown** — every failing batch sends one message                               | A fast-failing app can flood the owner's chat                                       | Rate-limit alerts per site (e.g., 1 message/minute) or batch digest                 |
+| G9  | `sites.is_active` doubles as the APM ingest toggle (naming/semantics carried over from uptime)                 | Reads as "monitor on/off"; no distinction between pause-origin and pause-signalling | Rename or introduce an explicit `apm_enabled` column in a future migration          |
 
-### 19.2 Release procedure
+Status-page wording, docs, and UI copy must not promise anything a listed gap blocks (e.g. no
+"rate limited", no "unlimited retention").
+
+---
+
+## 20. Deployment
 
 ```sh
-bunx wrangler d1 migrations apply webwatch --remote          # 1. schema
-bun run build                                                # 2. build the worker
-bunx wrangler secret put TELEGRAM_BOT_TOKEN                  # 3. secrets (once)
-bunx wrangler secret put TELEGRAM_BOT_USERNAME
+bunx wrangler d1 migrations apply webwatch --remote   # 0001..0007 in order
+bun run build                                         # Nitro → .output/
+bunx wrangler deploy                                  # single worker "webwatch"
+```
+
+Secrets:
+
+```sh
+bunx wrangler secret put TELEGRAM_BOT_TOKEN
 bunx wrangler secret put TELEGRAM_WEBHOOK_SECRET
-bunx wrangler deploy                                         # 4. main worker
-bunx wrangler secret put CRON_SECRET --config scheduler-worker/wrangler.jsonc
-bunx wrangler deploy --config scheduler-worker/wrangler.jsonc  # 5. scheduler
 ```
 
-The scheduler must be deployed **after** the main worker so that the `MAIN` service binding
-resolves.
-
-### 19.3 Telegram webhook registration
+Register the Telegram webhook (same secret as above):
 
 ```sh
-curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
-  --data-urlencode "url=https://webwatch.example/api/public/telegram/webhook" \
-  --data-urlencode "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d url="https://<deployment>/api/public/telegram/webhook" \
+  -d secret_token="$TELEGRAM_WEBHOOK_SECRET"
 ```
 
-If Telegram cannot resolve the `workers.dev` hostname from its own infrastructure, add
-`--data-urlencode "ip_address=<your worker ip>"`.
-
-### 19.4 Local development
+There is **no** cron trigger, no scheduler worker, no service binding. Locally:
 
 ```sh
-bun i
-bun run dev                          # Vite dev server — no D1 bindings available
-bun run build && bunx wrangler dev  # full worker with D1 + secrets
 bunx wrangler d1 migrations apply webwatch --local
+bun run build && bunx wrangler dev
 ```
-
-`vite dev` alone cannot inject the `DB` binding. Any code path that touches D1 will throw the
-descriptive error from `getAppEnv()`. Use `wrangler dev` for anything that reads or writes data.
-
----
-
-## 20. Test Strategy
-
-Vitest runs in a Node environment over `src/**/*.test.ts` (see `vitest.config.ts`). Tests are
-pure unit tests — no database, no network, no component rendering.
-
-| File | Subject | Coverage |
-| --- | --- | --- |
-| `src/lib/monitor-core.test.ts` | `evaluateStatus` | 7 cases: first success from `unknown`, staying `up` below threshold, flipping to `down` at threshold, staying `down`, `unknown` below threshold, `down → up` with `becameUp`, counter reset. |
-| | `isInCooldown` | 3 cases: never notified, inside the 10-minute window, past the window. |
-| | `shouldWarnSsl` | 5 cases: far from expiry, inside 7 days, warned < 24 h ago, warned > 24 h ago, already expired. |
-| `src/lib/telegram-server.test.ts` | `escapeHtml` | Escapes `<`, `>`, `&`. |
-| | `humanDuration` | 90 s → `"2 menit"`, 5.4 M ms → `"1 jam 30 menit"`, 10 s → `"1 menit"`. |
-| | `describeSslDaysLeft` | 0 / negative → `"hari ini"`, 6.9 → `"7 hari"`, 5 → `"5 hari"`, 1.2 → `"2 hari"`. |
-| | `formatDownMessage` | Icon, escaped label, `<code>` URL, escaped error, failure count, UTC timestamp. |
-| | `formatRecoveryMessage` | Icon, downtime, recovery time. |
-| | `formatSslWarningMessage` | Icon, "kedaluwarsa dalam 3 hari". |
-
-The pure/core split exists specifically to make this possible: `monitor-core.ts` holds the
-decision logic with no I/O, and `monitor.server.ts` holds the I/O around it.
-
-**Not covered:** D1 queries, HTTP handlers, the SDK, the bot dispatcher, and all UI. Adding
-integration tests would require a local D1 (available via `wrangler dev` + `--local` migrations)
-or a mocking layer for the D1 binding.

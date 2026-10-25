@@ -2,7 +2,8 @@ import { Badge } from "@/components/ui/badge";
 
 /*
  * A picture of the monitor list. The rows are illustrative, and the panel
- * says so, so the landing page never passes off sample data as a live feed.
+ * says so — the label always appears so the page never passes off sample data
+ * as a live feed.
  */
 const ROWS = [
   { host: "contoh-toko.id", ms: 128, up: true },
@@ -20,7 +21,7 @@ function Bars({ down }: { down: boolean }) {
         return (
           <span
             key={i}
-            className={`w-[3px] rounded-full ${bad ? "bg-danger" : "bg-up/70"}`}
+            className={`w-[3px] rounded-full ${bad ? "bg-danger" : "bg-up/60"}`}
             style={{ height: `${bad ? 24 : 40 + ((i * 37) % 60)}%` }}
           />
         );
@@ -32,16 +33,19 @@ function Bars({ down }: { down: boolean }) {
 export function StatusBoard() {
   return (
     <div className="panel overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3">
         <span className="font-mono text-xs text-muted-foreground">webwatch · monitor</span>
         <Badge variant="neutral">contoh tampilan</Badge>
       </div>
 
-      <ul className="divide-y divide-border">
-        {ROWS.map((row) => (
-          <li key={row.host} className="flex items-center gap-4 px-5 py-3.5">
+      <ul>
+        {ROWS.map((row, i) => (
+          <li
+            key={row.host}
+            className={`flex items-center gap-4 px-5 py-3.5 ${i < ROWS.length - 1 ? "border-b border-border" : ""}`}
+          >
             <span
-              className={`h-2 w-2 shrink-0 rounded-full ${row.up ? "bg-up" : "bg-danger"}`}
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${row.up ? "bg-up" : "bg-danger"}`}
               aria-hidden="true"
             />
             <div className="min-w-0 flex-1">
@@ -55,10 +59,10 @@ export function StatusBoard() {
         ))}
       </ul>
 
-      <div className="border-t border-border px-5 py-4">
-        <p className="font-mono text-xs text-muted-foreground">telegram · 12:03</p>
+      <div className="border-t border-border bg-muted/40 px-5 py-4">
+        <p className="font-mono text-xs text-muted-foreground">WebWatch Bot · 12:03</p>
         <p className="mt-2 text-sm font-medium text-foreground">
-          <span className="font-semibold text-danger">DOWN</span>
+          <span className="font-bold text-danger">DOWN</span>
           <span className="text-muted-foreground"> · contoh-blog.id</span>
         </p>
         <p className="mt-1 font-mono text-xs text-muted-foreground">

@@ -2,67 +2,59 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 /*
- * A monitor's state is always spelled out in words. The colour reinforces the
- * word, it never carries it: an unknown state is neutral, never green.
- *
- *   up        -> Operasional      (the check succeeded)
- *   degraded  -> Terlambat        (reachable, but slower than expected)
- *   down      -> Tidak Tersedia   (the check failed)
- *   unknown   -> Belum Dicek      (the site has never been checked)
- *   other     -> Tidak Diketahui  (a state this build does not recognise)
- *   inactive  -> Dijeda           (monitoring is paused, not broken)
+ * APM site status:
+ *   verified   -> Terverifikasi    (domain verified, accepting error logs)
+ *   pending    -> Pending Verifikasi  (domain not verified yet)
+ *   inactive   -> Dijeda           (error ingestion paused)
  */
-export type MonitorStatusKey = "up" | "degraded" | "down" | "unknown" | "unrecognised" | "paused";
 
-type Tone = "success" | "warning" | "danger" | "neutral";
+export type SiteStatusKey = "verified" | "pending" | "inactive";
 
-const STATES: Record<MonitorStatusKey, { label: string; tone: Tone }> = {
-  up: { label: "Operasional", tone: "success" },
-  degraded: { label: "Terlambat", tone: "warning" },
-  down: { label: "Tidak Tersedia", tone: "danger" },
-  unknown: { label: "Belum Dicek", tone: "neutral" },
-  unrecognised: { label: "Tidak Diketahui", tone: "neutral" },
-  paused: { label: "Dijeda", tone: "neutral" },
+type Tone = "success" | "warning" | "neutral" | "danger";
+
+const SITE_STATES: Record<SiteStatusKey, { label: string; tone: Tone }> = {
+  verified: { label: "Terverifikasi", tone: "success" },
+  pending: { label: "Pending Verifikasi", tone: "warning" },
+  inactive: { label: "Dijeda", tone: "neutral" },
 };
 
 const DOT: Record<Tone, string> = {
   success: "bg-up",
   warning: "bg-degraded",
-  danger: "bg-down",
   neutral: "bg-paused",
+  danger: "bg-down",
 };
 
-export function resolveMonitorStatus(
-  status: string | null | undefined,
-  active: boolean,
-): { key: MonitorStatusKey; label: string; tone: Tone } {
-  if (!active) {
-    return { key: "paused", ...STATES.paused };
+/**
+ * Resolve APM site status from verification_status and is_active.
+ */
+export function resolveSiteStatus(
+  verificationStatus: string | null | undefined,
+  isActive: boolean,
+): { key: SiteStatusKey; label: string; tone: Tone } {
+  if (!isActive) {
+    return { key: "inactive", ...SITE_STATES.inactive };
   }
-  switch (status) {
-    case "up":
-      return { key: "up", ...STATES.up };
-    case "down":
-      return { key: "down", ...STATES.down };
-    case "degraded":
-      return { key: "degraded", ...STATES.degraded };
-    case "unknown":
-      return { key: "unknown", ...STATES.unknown };
+  switch (verificationStatus) {
+    case "verified":
+      return { key: "verified", ...SITE_STATES.verified };
+    case "pending":
+      return { key: "pending", ...SITE_STATES.pending };
     default:
-      return { key: "unrecognised", ...STATES.unrecognised };
+      return { key: "pending", ...SITE_STATES.pending };
   }
 }
 
-export function StatusBadge({
-  status,
-  active,
+export function SiteStatusBadge({
+  verificationStatus,
+  isActive,
   className,
 }: {
-  status: string | null | undefined;
-  active: boolean;
+  verificationStatus: string | null | undefined;
+  isActive: boolean;
   className?: string;
 }) {
-  const state = resolveMonitorStatus(status, active);
+  const state = resolveSiteStatus(verificationStatus, isActive);
 
   return (
     <Badge variant={state.tone} className={cn("gap-1.5", className)}>

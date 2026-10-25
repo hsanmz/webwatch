@@ -1,58 +1,50 @@
-import { CheckCircle2, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Bug, KeyRound } from "lucide-react";
 
 /*
- * The three alert shapes Telegram actually sends. The message bodies are
- * examples, and the caption under them says so, so nothing here reads as a
- * real incident from a real customer.
+ * The alert shapes Telegram actually sends: APM ALERT from ingest, and the
+ * OTP login code. Bodies are examples.
  */
 const ALERTS = [
   {
-    icon: TriangleAlert,
+    icon: Bug,
     tone: "border-danger/25 bg-danger-surface text-danger",
-    title: "DOWN",
-    body: "contoh-blog.id",
-    detail: "timeout · 3x gagal",
+    title: "APM ALERT",
+    body: "contoh-api.id",
+    detail: "frontend_error · TypeError: Cannot read property 'x' of undefined",
     time: "12:03",
   },
   {
-    icon: CheckCircle2,
-    tone: "border-success/25 bg-success-surface text-success",
-    title: "PULIH",
-    body: "contoh-api.id",
-    detail: "downtime 02:14",
-    time: "12:05",
-  },
-  {
-    icon: ShieldAlert,
-    tone: "border-warning/25 bg-warning-surface text-warning",
-    title: "SSL",
-    body: "sertifikat contoh-toko.id",
-    detail: "habis dalam 7 hari",
-    time: "06:00",
+    icon: KeyRound,
+    tone: "border-primary/20 bg-primary-subtle text-primary",
+    title: "KODE MASUK",
+    body: "kamu@webwatch.id",
+    detail: "Kode OTP 6 digit · berlaku 5 menit",
+    time: "09:12",
   },
 ];
 
 export function TelegramAlerts() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="space-y-2">
       {ALERTS.map((alert) => (
         <div key={alert.title} className="panel flex items-start gap-3 p-4">
           <span
             className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${alert.tone}`}
+            aria-hidden="true"
           >
-            <alert.icon className="h-4 w-4" aria-hidden="true" />
+            <alert.icon className="h-4 w-4" />
           </span>
           <div className="min-w-0">
             <p className="font-mono text-xs text-muted-foreground">WebWatch Bot · {alert.time}</p>
             <p className="mt-1 text-sm text-foreground">
-              <span className="font-semibold text-foreground">{alert.title}</span>
+              <span className="font-semibold">{alert.title}</span>
               <span className="text-muted-foreground"> · {alert.body}</span>
             </p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">{alert.detail}</p>
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{alert.detail}</p>
           </div>
         </div>
       ))}
-      <p className="text-xs text-muted-foreground">Contoh isi pesan, bukan incident nyata.</p>
+      <p className="px-1 text-xs text-muted-foreground">Contoh isi pesan, bukan error nyata.</p>
     </div>
   );
 }

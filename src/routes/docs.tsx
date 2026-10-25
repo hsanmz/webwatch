@@ -1,10 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity,
   ArrowLeft,
-  BellRing,
   BookOpen,
+  Bug,
   Code,
   Database,
   Globe,
@@ -12,6 +11,7 @@ import {
   ListChecks,
   Lock,
   Menu,
+  MessageSquare,
   Server,
   Shield,
   Terminal,
@@ -36,11 +36,11 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/docs")({
   head: () => ({
     meta: [
-      { title: "Dokumentasi WebWatch" },
+      { title: "Dokumentasi WebWatch APM" },
       {
         name: "description",
         content:
-          "Dokumentasi WebWatch: verifikasi domain, SDK frontend, middleware Express, REST API ingestion, dan perintah bot Telegram.",
+          "Dokumentasi WebWatch APM: verifikasi domain, SDK frontend, middleware Express, REST API ingestion, dan perintah bot Telegram.",
       },
     ],
   }),
@@ -156,39 +156,16 @@ const DOCS_SECTIONS = [
           yang mahal, rumit diatur, dan penuh dengan metrik yang tidak relevan. Filosofi kami
           sederhana:{" "}
           <strong className="text-foreground">
-            Pantau apa yang penting, laporkan secepat mungkin, dan jangan ganggu performa aplikasi.
+            Pantau error yang penting, laporkan secepat mungkin, dan jangan ganggu performa
+            aplikasi.
           </strong>
         </P>
         <P>
-          Sistem ini terbagi menjadi dua pilar utama yang berjalan berdampingan namun saling
-          melengkapi.
+          Sistem ini fokus pada satu pilar utama: Application Performance Monitoring (APM) / Error
+          Monitoring. SDK ultra-ringan menangkap <em>stack trace</em>, konteks HTTP (URL dan
+          method), serta nama environment tepat di milidetik terjadinya <em>crash</em> atau{" "}
+          <em>unhandled exception</em>.
         </P>
-
-        <div className="my-8 grid grid-cols-1 gap-5 md:grid-cols-2">
-          <div className="panel p-6">
-            <Globe className="mb-4 h-7 w-7 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">
-              Synthetic Uptime Monitoring
-            </h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Pengecekan proaktif dari luar. Worker kami melakukan request HTTP/HTTPS ke situs Anda
-              secara berkala untuk mendeteksi <em>downtime</em>, mengukur <em>response time</em>,
-              memeriksa kata kunci tertentu pada body, atau memberi peringatan sertifikat SSL
-              sebelum pengunjung Anda menyadarinya.
-            </p>
-          </div>
-          <div className="panel p-6">
-            <Activity className="mb-4 h-7 w-7 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">
-              Application Performance Monitoring
-            </h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Pelaporan reaktif dari dalam. Dengan SDK ultra-ringan, sistem menangkap{" "}
-              <em>stack trace</em>, konteks HTTP (URL dan method), serta nama environment tepat di
-              milidetik terjadinya <em>crash</em> atau <em>unhandled exception</em>.
-            </p>
-          </div>
-        </div>
 
         <Callout tone="brand" title="Arsitektur edge-first">
           Seluruh <em>ingestion layer</em> dibangun di atas Cloudflare Workers. Payload error dari
@@ -217,13 +194,13 @@ const DOCS_SECTIONS = [
         </P>
         <OL>
           <li>
-            Buka <strong className="text-foreground">Uptime Monitors</strong> lalu pilih situs Anda
-            di dashboard, lalu salin token verifikasi yang ditampilkan pada dialog{" "}
+            Buka <strong className="text-foreground">Sites</strong> lalu pilih situs Anda di
+            dashboard, lalu salin token verifikasi yang ditampilkan pada dialog{" "}
             <em>Verifikasi Domain</em>.
           </li>
           <li>
             Buat file bernama <IC>webwatch-verify.txt</IC> di web root / document root situs Anda,
-            lalu isihkan dengan token tersebut tanpa teks tambahan.
+            lalu isi dengan token tersebut tanpa teks tambahan.
           </li>
           <li>
             Kembali ke dashboard dan tekan <strong className="text-foreground">Verifikasi</strong>.
@@ -238,9 +215,8 @@ const DOCS_SECTIONS = [
 
         <Callout tone="warning" title="Dampak verifikasi">
           Selama status masih <IC>pending</IC>, endpoint ingestion akan menjawab{" "}
-          <IC>403 site_not_verified</IC> untuk situs tersebut. Pemantauan uptime sendiri{" "}
-          <strong className="text-foreground">tidak</strong> terhambat oleh verifikasi. Anda tetap
-          bisa memantau domain sebelum selesai memverifikasi.
+          <IC>403 site_not_verified</IC> untuk situs tersebut. Tidak ada log error yang diterima
+          sebelum verifikasi selesai.
         </Callout>
 
         <H3>2. Manajemen Lingkungan (Environments)</H3>
@@ -313,7 +289,6 @@ const DOCS_SECTIONS = [
           className="mb-6"
           code={`import { WebWatch } from "https://webwatch.example/api/public/sdk";
 
-// API key diambil dari halaman detail situs, bagian API Keys
 WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
         />
 
@@ -484,10 +459,13 @@ app.listen(3000);`}
 
         <Callout tone="neutral" title="Tentang paket npm">
           <p>
-            Source paket <IC>@webwatch/sdk</IC> tersedia di folder <IC>packages/webwatch-sdk</IC>,
-            namun saat ini masih memakai URL ingestion placeholder dan tidak menerima parameter
-            endpoint. Untuk pemakaian nyata, gunakan modul yang disajikan dari{" "}
-            <IC>/api/public/sdk</IC> seperti pada contoh di atas.
+            Source paket <IC>@webwatch/sdk</IC> tersedia di folder <IC>packages/webwatch-sdk</IC>{" "}
+            dan bisa dipasang lewat npm/bun: set env <IC>WEBWATCH_KEY</IC> dan <IC>WEBWATCH_URL</IC>
+            , lalu <IC>{'import "@webwatch/sdk"'}</IC> sekali di entrypoint — unhandled error dan
+            unhandled rejection langsung terkirim dengan batching dan retry. Helper siap pakai
+            tersedia untuk Express, Hono, Fastify, dan Next.js. Catatan: paket ini belum
+            dipublikasikan ke registry npm, sementara itu gunakan modul yang disajikan dari{" "}
+            <IC>/api/public/sdk</IC>.
           </p>
         </Callout>
       </>
@@ -684,7 +662,7 @@ app.listen(3000);`}
   {
     id: "alerting",
     title: "Sistem Alerting & Perintah Bot",
-    icon: BellRing,
+    icon: MessageSquare,
     content: (
       <>
         <P>
@@ -703,36 +681,20 @@ app.listen(3000);`}
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell>Situs gagal melewati ambang batas beruntun</TableCell>
-              <TableCell>
-                <Badge variant="danger">DOWN</Badge>{" "}
-                <span className="text-muted-foreground">
-                  label, URL, pesan error, jumlah kegagalan, waktu UTC.
-                </span>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Situs kembali merespons berhasil</TableCell>
-              <TableCell>
-                <Badge variant="success">RECOVERED</Badge>{" "}
-                <span className="text-muted-foreground">
-                  label, URL, durasi downtime, waktu pemulihan.
-                </span>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Sertifikat SSL akan kedaluwarsa 7 hari atau kurang</TableCell>
-              <TableCell>
-                <Badge variant="warning">SSL CERTIFICATE</Badge>{" "}
-                <span className="text-muted-foreground">label, URL, sisa hari, waktu UTC.</span>
-              </TableCell>
-            </TableRow>
-            <TableRow>
               <TableCell>Batch APM memuat event bertipe error</TableCell>
               <TableCell>
                 <Badge variant="info">APM ALERT</Badge>{" "}
                 <span className="text-muted-foreground">
                   tipe, environment, pesan, endpoint yang terkena.
+                </span>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Proses login dengan kode OTP</TableCell>
+              <TableCell>
+                <Badge variant="neutral">KODE MASUK</Badge>{" "}
+                <span className="text-muted-foreground">
+                  kode 6 digit, berlaku 5 menit dan dipakai sekali.
                 </span>
               </TableCell>
             </TableRow>
@@ -742,20 +704,10 @@ app.listen(3000);`}
         <H3>Aturan anti-spam</H3>
         <UL>
           <li>
-            Notifikasi <strong className="text-foreground">DOWN</strong> dan{" "}
-            <strong className="text-foreground">RECOVERED</strong> untuk satu situs memiliki jeda
-            minimal <strong className="text-foreground">10 menit</strong>. Bila kejadian lain
-            terjadi di dalam rentang tersebut, pesan ditahan sampai cooldown selesai.
-          </li>
-          <li>
-            Peringatan SSL hanya dikirim ulang paling cepat{" "}
-            <strong className="text-foreground">1 kali per 24 jam</strong> per situs.
-          </li>
-          <li>
             Dari satu batch APM, hanya{" "}
             <strong className="text-foreground">event error pertama</strong> yang diumumkan lewat
             Telegram. Sisanya tetap tercatat dan dapat dilihat di halaman{" "}
-            <strong className="text-foreground">APM &amp; Issues</strong>.
+            <strong className="text-foreground">Log Error (APM)</strong>.
           </li>
           <li>Notifikasi hanya dikirim ke chat Telegram yang sudah terhubung dengan akun Anda.</li>
         </UL>
@@ -786,15 +738,15 @@ app.listen(3000);`}
             </TableRow>
             <TableRow>
               <TableCell>
-                <IC>/addsite &lt;url&gt; [interval_menit]</IC>
+                <IC>/addsite &lt;url&gt;</IC>
               </TableCell>
-              <TableCell>Menambahkan situs yang dipantau.</TableCell>
+              <TableCell>Menambahkan situs untuk menerima log error.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
-                <IC>/listsite</IC> atau <IC>/status</IC>
+                <IC>/listsite</IC>
               </TableCell>
-              <TableCell>Menampilkan daftar situs beserta statusnya.</TableCell>
+              <TableCell>Menampilkan daftar situs beserta status verifikasinya.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
@@ -806,13 +758,7 @@ app.listen(3000);`}
               <TableCell>
                 <IC>/pause &lt;id&gt;</IC> atau <IC>/resume &lt;id&gt;</IC>
               </TableCell>
-              <TableCell>Menjeda atau melanjutkan pemantauan.</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>/history &lt;id&gt;</IC>
-              </TableCell>
-              <TableCell>Uptime 30 hari beserta insiden terakhir.</TableCell>
+              <TableCell>Menjeda atau melanjutkan penerimaan log error.</TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -850,18 +796,17 @@ app.listen(3000);`}
             <Layers className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
             <h3 className="mb-2 text-base font-semibold text-foreground">Isolasi tenant</h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Setiap data situs, insiden, event, dan API key terikat pada akun pemiliknya. Seluruh
-              query terautentikasi dijalankan dengan filter <IC>user_id</IC>, sehingga satu akun
-              tidak dapat membaca atau mengubah data akun lain.
+              Setiap data situs, event, dan API key terikat pada akun pemiliknya. Seluruh query
+              terautentikasi dijalankan dengan filter <IC>user_id</IC>, sehingga satu akun tidak
+              dapat membaca atau mengubah data akun lain.
             </p>
           </div>
           <div className="panel p-5">
-            <Activity className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">Retensi terbatas</h3>
+            <Bug className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
+            <h3 className="mb-2 text-base font-semibold text-foreground">Retensi data</h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Riwayat pemeriksaan uptime dan insiden yang sudah selesai dihapus otomatis setelah{" "}
-              <strong className="text-foreground">30 hari</strong>. Event APM disimpan sebagai arsip
-              dan dapat dihapus manual dari dashboard.
+              Event APM disimpan sebagai arsip dan dapat dihapus manual dari dashboard. Pembersihan
+              otomatis bisa dikonfigurasi.
             </p>
           </div>
         </div>
@@ -875,8 +820,7 @@ app.listen(3000);`}
           </li>
           <li>API key dibuat per situs dan dapat dicabut dengan menghapus key tersebut.</li>
           <li>
-            Endpoint webhook Telegram dan endpoint cron dilindungi shared secret yang dibandingkan
-            secara timing-safe.
+            Endpoint webhook Telegram dilindungi shared secret yang dibandingkan secara timing-safe.
           </li>
         </UL>
 
@@ -887,7 +831,7 @@ app.listen(3000);`}
           valid, dan seluruh isinya dipisahkan per situs.
         </P>
 
-        <H3>Komitmen GDPR &amp; CCPA</H3>
+        <H3>Komitmen GDPR & CCPA</H3>
         <P>
           Sistem kami dirancang agar beroperasi penuh sebagai <em>Data Processor</em>. Kami
           menyarankan Anda, sebagai <em>Data Controller</em>, untuk tidak mengirim nama, email, atau
@@ -895,14 +839,6 @@ app.listen(3000);`}
           samaran (<em>anonymized user ID</em>), dan hapus atau sensor setiap data sensitif sebelum
           dikirim.
         </P>
-
-        <Callout tone="neutral" title="Endpoint cron untuk verifikasi" icon={Webhook}>
-          <p>
-            Ingin memantau uptime lewat curl? Endpoint manual tersedia di{" "}
-            <IC>POST /api/public/cron/run</IC> dengan header <IC>x-webwatch-cron</IC>. Endpoint ini
-            hanya dipakai untuk keperluan verifikasi.
-          </p>
-        </Callout>
       </>
     ),
   },
@@ -1104,11 +1040,11 @@ function DocsPage() {
           <div className="mx-auto max-w-content px-6 py-12 md:px-10">
             <div className="mb-16">
               <h1 className="mb-5 font-display text-4xl font-extrabold tracking-tight md:text-5xl">
-                Dokumentasi WebWatch
+                Dokumentasi WebWatch APM
               </h1>
               <p className="max-w-reading text-lg font-medium leading-relaxed text-muted-foreground md:text-xl">
                 Panduan setup, referensi API, dan perilaku alerting untuk membangun sistem
-                pengawasan aplikasi.
+                pengawasan error aplikasi.
               </p>
             </div>
 

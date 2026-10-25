@@ -1,16 +1,14 @@
 import { db } from "./wrangler-env";
 import { ensureUser, newId } from "./auth.server";
-import { escapeHtml, humanDuration, sendTelegram } from "./telegram.server";
+import { escapeHtml, sendTelegram } from "./telegram.server";
 
 const HELP = [
-  "<b>WebWatch</b> — perintah yang tersedia:",
-  "/addsite &lt;url&gt; [interval_menit] — tambah situs",
+  "<b>WebWatch APM</b> — perintah yang tersedia:",
+  "/addsite <url> — tambah situs untuk menerima log error",
   "/listsite — daftar situs",
-  "/status — ringkasan status semua situs",
-  "/removesite &lt;id&gt; — hapus situs",
-  "/pause &lt;id&gt; — hentikan sementara",
-  "/resume &lt;id&gt; — lanjutkan pemantauan",
-  "/history &lt;id&gt; — uptime & insiden 30 hari",
+  "/removesite <id> — hapus situs",
+  "/pause <id> — hentikan menerima log error",
+  "/resume <id> — lanjutkan menerima log error",
 ].join("\n");
 
 function shortId(id: string) {
@@ -28,7 +26,7 @@ async function userIdForChat(chatId: string): Promise<string | null> {
 async function findSite(userId: string, ref: string) {
   const { results } = await db()
     .prepare(
-      "SELECT id, name, url, is_active, current_status FROM sites WHERE user_id = ? AND id LIKE ? LIMIT 2",
+      "SELECT id, name, url, is_active, verification_status FROM sites WHERE user_id = ? AND id LIKE ? LIMIT 2",
     )
     .bind(userId, `${ref}%`)
     .all<{
@@ -36,7 +34,7 @@ async function findSite(userId: string, ref: string) {
       name: string | null;
       url: string;
       is_active: number;
-      current_status: string;
+      verification_status: string;
     }>();
   if (!results || results.length !== 1) return null;
   return results[0];
@@ -44,9 +42,8 @@ async function findSite(userId: string, ref: string) {
 
 function statusIcon(status: string, active: number) {
   if (!active) return "⏸️";
-  if (status === "up") return "🟢";
-  if (status === "down") return "🔴";
-  return "⚪";
+  if (status === "verified") return "✅";
+  return "⏳";
 }
 
 async function handleStart(chatId: string, arg: string | undefined, username: string | null) {
@@ -79,7 +76,7 @@ async function handleStart(chatId: string, arg: string | undefined, username: st
 
 async function handleAddSite(userId: string, args: string[]) {
   const raw = args[0];
-  if (!raw) return "Format: /addsite &lt;url&gt; [interval_menit]";
+  if (!raw) return "Format: /addsite <url>";
   const guess = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   let parsed: URL;
   try {
@@ -113,84 +110,40 @@ async function handleAddSite(userId: string, args: string[]) {
     .first<{ id: string }>();
   if (taken) return "❌ URL sudah dipantau akun lain.";
 
-  const minutes = Math.max(1, Number(args[1] ?? 5) || 5);
   const id = newId();
   try {
     await db()
       .prepare(
-        "INSERT INTO sites (id, user_id, url, name, interval_seconds) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO sites (id, user_id, url, name, verification_token, verification_status) VALUES (?, ?, ?, ?, ?, 'pending')",
       )
-      .bind(id, userId, url, parsed.hostname, minutes * 60)
+      .bind(id, userId, url, parsed.hostname, newId())
       .run();
   } catch {
     return "❌ URL sudah dipantau akun lain.";
   }
-  return `✅ Ditambahkan: <code>${escapeHtml(url)}</code>\nID: <code>${shortId(id)}</code>\nInterval: ${minutes} menit`;
+  return `✅ Ditambahkan: <code>${escapeHtml(url)}</code>\nID: <code>${shortId(id)}</code>\nStatus: ⏳ Menunggu verifikasi`;
 }
 
 async function handleList(userId: string) {
   const { results } = await db()
     .prepare(
-      "SELECT id, name, url, current_status, is_active, interval_seconds FROM sites WHERE user_id = ? ORDER BY created_at ASC",
+      "SELECT id, name, url, is_active, verification_status FROM sites WHERE user_id = ? ORDER BY created_at ASC",
     )
     .bind(userId)
     .all<{
       id: string;
       name: string | null;
       url: string;
-      current_status: string;
       is_active: number;
-      interval_seconds: number;
+      verification_status: string;
     }>();
-  if (!results?.length) return "Belum ada situs. Tambah dengan /addsite &lt;url&gt;";
+  if (!results?.length) return "Belum ada situs. Tambah dengan /addsite <url>";
   return results
     .map(
       (s) =>
-        `${statusIcon(s.current_status, s.is_active)} <b>${escapeHtml(s.name || s.url)}</b>\n<code>${shortId(s.id)}</code> · ${s.interval_seconds / 60}m · ${escapeHtml(s.url)}`,
+        `${statusIcon(s.verification_status, s.is_active)} <b>${escapeHtml(s.name || s.url)}</b>\n<code>${shortId(s.id)}</code> · ${escapeHtml(s.url)}`,
     )
     .join("\n\n");
-}
-
-async function handleHistory(userId: string, ref: string | undefined) {
-  if (!ref) return "Format: /history &lt;id&gt;";
-  const site = await findSite(userId, ref);
-  if (!site) return "Situs tidak ditemukan.";
-
-  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const agg = await db()
-    .prepare(
-      "SELECT COUNT(*) AS total, COALESCE(SUM(is_up), 0) AS up FROM checks WHERE site_id = ? AND checked_at >= ?",
-    )
-    .bind(site.id, since)
-    .first<{ total: number; up: number }>();
-  const total = Number(agg?.total ?? 0);
-  const up = Number(agg?.up ?? 0);
-  const uptime = total ? ((up / total) * 100).toFixed(2) : "—";
-
-  const { results: incidents } = await db()
-    .prepare(
-      "SELECT started_at, resolved_at, error_message FROM incidents WHERE site_id = ? AND started_at >= ? ORDER BY started_at DESC LIMIT 5",
-    )
-    .bind(site.id, since)
-    .all<{ started_at: string; resolved_at: string | null; error_message: string | null }>();
-
-  const lines = [
-    `📊 <b>${escapeHtml(site.name || site.url)}</b>`,
-    `Uptime 30 hari: <b>${uptime}%</b> (${total} cek)`,
-    "",
-    "<b>Insiden terakhir:</b>",
-  ];
-  if (!incidents?.length) lines.push("Tidak ada insiden 🎉");
-  else
-    for (const i of incidents) {
-      const dur = i.resolved_at
-        ? humanDuration(new Date(i.resolved_at).getTime() - new Date(i.started_at).getTime())
-        : "masih berlangsung";
-      lines.push(
-        `• ${i.started_at.replace("T", " ").slice(0, 16)} UTC — ${dur}${i.error_message ? ` (${escapeHtml(i.error_message)})` : ""}`,
-      );
-    }
-  return lines.join("\n");
 }
 
 export async function handleTelegramUpdate(update: {
@@ -228,13 +181,11 @@ export async function handleTelegramUpdate(update: {
       reply = await handleAddSite(userId, args);
       break;
     case "/listsite":
-    case "/status": {
       reply = await handleList(userId);
       break;
-    }
     case "/removesite": {
       const site = args[0] ? await findSite(userId, args[0]) : null;
-      if (!site) reply = "Format: /removesite &lt;id&gt;";
+      if (!site) reply = "Format: /removesite <id>";
       else {
         await db()
           .prepare("DELETE FROM sites WHERE id = ? AND user_id = ?")
@@ -248,21 +199,16 @@ export async function handleTelegramUpdate(update: {
     case "/resume": {
       const active = command === "/resume" ? 1 : 0;
       const site = args[0] ? await findSite(userId, args[0]) : null;
-      if (!site) reply = `Format: ${command} &lt;id&gt;`;
+      if (!site) reply = `Format: ${command} <id>`;
       else {
         await db()
-          .prepare(
-            "UPDATE sites SET is_active = ?, consecutive_failures = 0 WHERE id = ? AND user_id = ?",
-          )
+          .prepare("UPDATE sites SET is_active = ? WHERE id = ? AND user_id = ?")
           .bind(active, site.id, userId)
           .run();
-        reply = `${active ? "▶️ Dilanjutkan" : "⏸️ Dijeda"}: ${escapeHtml(site.name || site.url)}`;
+        reply = `${active ? "▶️ Diaktifkan" : "⏸️ Dijeda"}: ${escapeHtml(site.name || site.url)}`;
       }
       break;
     }
-    case "/history":
-      reply = await handleHistory(userId, args[0]);
-      break;
     default:
       reply = HELP;
   }

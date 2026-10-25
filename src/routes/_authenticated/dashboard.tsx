@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Activity, History, Server, TriangleAlert } from "lucide-react";
+import { Activity, Server } from "lucide-react";
 
 import { api, type ApiSite } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/app/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
+  head: () => ({ meta: [{ title: "Dashboard - WebWatch" }] }),
   component: Dashboard,
 });
 
@@ -41,20 +42,11 @@ type ApmEventRow = {
   site_id: string;
 };
 
-type IncidentRow = {
-  id: string;
-  started_at: string;
-  resolved_at: string | null;
-  error_message: string | null;
-  site_name: string;
-  site_id: string;
-};
-
 function useDashboardStats() {
   return useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
-      return api<{ events: ApmEventRow[]; incidents: IncidentRow[] }>("/api/sites/dashboard");
+      return api<{ events: ApmEventRow[] }>("/api/sites/dashboard");
     },
   });
 }
@@ -74,26 +66,24 @@ function Dashboard() {
     const list = sites.data ?? [];
     return {
       total: list.length,
-      up: list.filter((s) => s.is_active && s.current_status === "up").length,
-      down: list.filter((s) => s.is_active && s.current_status === "down").length,
-      paused: list.filter((s) => !s.is_active).length,
+      active: list.filter((s) => s.is_active && s.verification_status === "verified").length,
+      pending: list.filter((s) => s.verification_status === "pending").length,
     };
   }, [sites.data]);
 
   const events = stats.data?.events ?? [];
-  const incidents = stats.data?.incidents ?? [];
 
   return (
     <>
       {!connected && user && (
         <section className="panel flex flex-wrap items-center justify-between gap-4 border-warning/30 bg-warning-surface p-5">
           <div>
-            <h2 className="font-display text-base font-semibold text-foreground">
+            <h2 className="font-display text-sm font-semibold text-foreground">
               Telegram belum terhubung
             </h2>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Notifikasistatus belum bisa dikirim. Hubungkan akun Telegram kamu supaya alert
-              downtime dan pemulihan langsung masuk ke chat.
+              Notifikasi error APM belum bisa dikirim. Hubungkan akun Telegram supaya alert error
+              langsung masuk ke chat.
             </p>
           </div>
           <Button asChild size="sm" variant="outline" className="border-warning/40 text-warning">
@@ -104,18 +94,14 @@ function Dashboard() {
 
       <PageHeader
         eyebrow="Ringkasan"
-        title="Sistem Monitoring"
-        description="Ringkasan ketersediaan situs dan log aplikasi yang kamu pantau."
-        actions={
-          <Button asChild variant="outline">
-            <Link to="/monitors">Kelola Situs</Link>
-          </Button>
-        }
+        title="Dashboard"
+        description="Log error dan exception dari seluruh aplikasi yang kamu pantau."
       />
 
+      {/* ── Stat row ────────────────────────────────────────────────── */}
       {sites.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-[104px] rounded-lg" />
           ))}
         </div>
@@ -126,28 +112,21 @@ function Dashboard() {
           onRetry={() => void sites.refetch()}
         />
       ) : (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard icon={Server} label="Total situs" value={summary.total} sub="terdaftar" />
           <StatCard
             icon={Activity}
-            label="Operasional"
-            value={summary.up}
-            sub="pemantauan aktif"
+            label="Aktif & Terverifikasi"
+            value={summary.active}
+            sub="menerima log error"
             tone="up"
           />
           <StatCard
-            icon={TriangleAlert}
-            label="Tidak tersedia"
-            value={summary.down}
-            sub="butuh perhatian"
-            tone="down"
-          />
-          <StatCard
-            icon={History}
-            label="Dijeda"
-            value={summary.paused}
-            sub="pemantauan nonaktif"
-            tone="paused"
+            icon={Activity}
+            label="Menunggu verifikasi"
+            value={summary.pending}
+            sub="belum bisa terima log"
+            tone="warning"
           />
         </section>
       )}
@@ -156,150 +135,116 @@ function Dashboard() {
         <EmptyState
           icon={Server}
           title="Belum ada situs dipantau"
-          description="Tambahkan website pertama kamu di halaman Monitors, lalu WebWatch akan mengeceknya secara berkala."
+          description="Tambahkan website pertama kamu untuk mulai menerima log error dari aplikasi."
           action={
             <Button asChild>
-              <Link to="/monitors">Tambah Situs Pertama</Link>
+              <Link to="/docs">Lihat Cara Menambah Situs</Link>
             </Button>
           }
         />
       )}
 
       {(sites.data?.length ?? 0) > 0 && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="panel flex flex-col p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="font-display text-base font-semibold text-foreground">
+        <section className="panel flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="font-display text-sm font-semibold text-foreground">
                 Exception terbaru
               </h2>
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/apm">Semua log</Link>
-              </Button>
             </div>
-            <div className="mt-2 flex-1">
-              {stats.isPending ? (
-                <ul className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <li key={i}>
-                      <Skeleton className="h-16 rounded-lg" />
-                    </li>
-                  ))}
-                </ul>
-              ) : stats.isError ? (
-                <ErrorState
-                  className="min-h-[160px]"
-                  title="Log error gagal dimuat"
-                  description="Data exception tidak bisa diambil dari server."
-                  onRetry={() => void stats.refetch()}
-                />
-              ) : events.length === 0 ? (
-                <EmptyState
-                  className="min-h-[160px]"
-                  icon={Activity}
-                  title="Tidak ada error tercatat"
-                  description="Belum ada exception yang masuk dari SDK WebWatch pada situs yang kamu pantau."
-                />
-              ) : (
-                <ul className="space-y-3">
-                  {events.slice(0, 5).map((ev) => (
-                    <li key={ev.id} className="rounded-lg border border-border bg-surface p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Badge variant={isErrorEvent(ev.event_type) ? "danger" : "info"}>
-                            {ev.event_type}
-                          </Badge>
-                          <Link
-                            to={`/sites/${ev.site_id}`}
-                            className="truncate text-sm font-medium hover:underline"
-                          >
-                            {ev.site_name}
-                          </Link>
-                        </div>
-                        <time
-                          className="shrink-0 text-xs text-muted-foreground tabular-nums"
-                          dateTime={ev.created_at}
-                        >
-                          {new Date(ev.created_at).toLocaleTimeString("id-ID")}
-                        </time>
-                      </div>
-                      <p className="mt-1.5 truncate text-sm text-foreground" title={ev.message}>
-                        {ev.message}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+              <Link to="/apm">Semua log</Link>
+            </Button>
+          </div>
 
-          <section className="panel flex flex-col p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="font-display text-base font-semibold text-foreground">
-                Insiden terbaru
-              </h2>
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/incidents">Semua insiden</Link>
-              </Button>
+          {!stats.isPending && !stats.isError && events.length > 0 && (
+            <div className="flex items-center justify-between border-b border-border bg-muted/40 px-5 py-2 text-[11px] font-medium text-muted-foreground">
+              <span>Event · Situs · Environment</span>
+              <span>Waktu</span>
             </div>
-            <div className="mt-2 flex-1">
-              {stats.isPending ? (
-                <ul className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <li key={i}>
-                      <Skeleton className="h-16 rounded-lg" />
-                    </li>
-                  ))}
-                </ul>
-              ) : stats.isError ? (
-                <ErrorState
-                  className="min-h-[160px]"
-                  title="Insiden gagal dimuat"
-                  description="Riwayat insiden tidak bisa diambil dari server."
-                  onRetry={() => void stats.refetch()}
-                />
-              ) : incidents.length === 0 ? (
-                <EmptyState
-                  className="min-h-[160px]"
-                  icon={History}
-                  title="Tidak ada downtime"
-                  description="Belum ada gangguan yang tercatat untuk situs yang kamu pantau."
-                />
-              ) : (
-                <ul className="space-y-3">
-                  {incidents.slice(0, 5).map((inc) => (
-                    <li key={inc.id} className="rounded-lg border border-border bg-surface p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Link
-                            to={`/sites/${inc.site_id}`}
-                            className="truncate text-sm font-medium hover:underline"
-                          >
-                            {inc.site_name}
-                          </Link>
-                          <Badge variant={inc.resolved_at ? "success" : "danger"}>
-                            {inc.resolved_at ? "Selesai" : "Berlangsung"}
-                          </Badge>
-                        </div>
-                        <time
-                          className="shrink-0 text-xs text-muted-foreground tabular-nums"
-                          dateTime={inc.started_at}
+          )}
+
+          <div className="flex-1 p-5">
+            {stats.isPending ? (
+              <ul className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <li key={i}>
+                    <Skeleton className="h-24 rounded-lg" />
+                  </li>
+                ))}
+              </ul>
+            ) : stats.isError ? (
+              <ErrorState
+                className="min-h-[180px]"
+                title="Log error gagal dimuat"
+                description="Data exception tidak bisa diambil dari server."
+                onRetry={() => void stats.refetch()}
+              />
+            ) : events.length === 0 ? (
+              <EmptyState
+                className="min-h-[180px]"
+                icon={Activity}
+                title="Belum ada error tercatat"
+                description="Belum ada exception yang masuk dari SDK WebWatch pada situs yang kamu pantau."
+              />
+            ) : (
+              <ul className="space-y-3">
+                {events.slice(0, 10).map((ev) => (
+                  <li key={ev.id} className="rounded-lg border border-border bg-surface p-4">
+                    {/* Top row: meta */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          to="/sites/$id"
+                          params={{ id: ev.site_id }}
+                          className="text-sm font-semibold text-foreground hover:underline"
                         >
-                          {new Date(inc.started_at).toLocaleTimeString("id-ID")}
-                        </time>
+                          {ev.site_name}
+                        </Link>
+                        <Badge
+                          variant={isErrorEvent(ev.event_type) ? "danger" : "info"}
+                          className="font-mono text-[10px]"
+                        >
+                          {ev.event_type}
+                        </Badge>
+                        <Badge variant="neutral" className="font-mono text-[10px]">
+                          {ev.environment}
+                        </Badge>
                       </div>
-                      <p
-                        className="mt-1.5 truncate text-sm text-muted-foreground"
-                        title={inc.error_message ?? "Koneksi gagal"}
+                      <time
+                        className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+                        dateTime={ev.created_at}
                       >
-                        {inc.error_message ?? "Koneksi gagal atau timeout"}
+                        {new Date(ev.created_at).toLocaleString("id-ID", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </time>
+                    </div>
+
+                    {/* Message */}
+                    <p className="mt-2 text-sm font-medium text-foreground">{ev.message}</p>
+
+                    {/* Request info */}
+                    {(ev.method || ev.url) && (
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                        {[ev.method, ev.url].filter(Boolean).join(" ")}
                       </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
-        </div>
+                    )}
+
+                    {/* Stack trace */}
+                    {ev.stack_trace && (
+                      <pre className="mt-2 w-full overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+                        {ev.stack_trace}
+                      </pre>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       )}
     </>
   );
