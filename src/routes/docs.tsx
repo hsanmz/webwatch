@@ -1,21 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
+  Bell,
   BookOpen,
-  Bug,
+  CheckCircle2,
   Code,
+  Container,
   Database,
-  Globe,
-  Layers,
+  ExternalLink,
+  Info,
   ListChecks,
-  Lock,
   Menu,
-  MessageSquare,
   Server,
-  Shield,
+  ShieldAlert,
   Terminal,
-  Webhook,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -36,11 +36,11 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/docs")({
   head: () => ({
     meta: [
-      { title: "Dokumentasi WebWatch APM" },
+      { title: "WebWatch APM Documentation" },
       {
         name: "description",
         content:
-          "Dokumentasi WebWatch APM: verifikasi domain, SDK frontend, middleware Express, REST API ingestion, dan perintah bot Telegram.",
+          "Documentation for WebWatch APM: zero-config @webwatch/sdk, Node.js & browser integrations, REST API ingestion, and Telegram error alerts.",
       },
     ],
   }),
@@ -49,10 +49,6 @@ export const Route = createFileRoute("/docs")({
 
 /* -------------------------------------------------------------------------- */
 /*  Prose primitives                                                          */
-/*                                                                            */
-/*  The docs page writes its own body copy, so the shared text styles live in  */
-/*  one place instead of being repeated on every paragraph. Inline code always */
-/*  uses the same chip and every table uses the shared Table primitives.       */
 /* -------------------------------------------------------------------------- */
 
 function H3({ children }: { children: ReactNode }) {
@@ -119,13 +115,13 @@ const CALLOUT_TONES: Record<CalloutTone, { box: string; title: string; body: str
 function Callout({
   tone = "neutral",
   title,
-  icon: Icon,
   children,
+  icon: Icon,
 }: {
   tone?: CalloutTone;
   title: string;
-  icon?: LucideIcon;
   children: ReactNode;
+  icon?: LucideIcon;
 }) {
   const styles = CALLOUT_TONES[tone];
 
@@ -147,91 +143,142 @@ function Callout({
 const DOCS_SECTIONS = [
   {
     id: "prolog",
-    title: "Prolog: Filosofi WebWatch",
+    title: "Prologue: Philosophy & Architecture",
     icon: BookOpen,
     content: (
       <>
         <P>
-          WebWatch lahir dari rasa frustrasi menghadapi <em>monitoring tools</em> tingkat enterprise
-          yang mahal, rumit diatur, dan penuh dengan metrik yang tidak relevan. Filosofi kami
-          sederhana:{" "}
+          WebWatch was created out of frustration with heavyweight, expensive enterprise monitoring
+          suites that require complex daemon agents, tedious configuration files, and bury critical
+          signals under thousands of vanity metrics. Our core philosophy is simple:{" "}
           <strong className="text-foreground">
-            Pantau error yang penting, laporkan secepat mungkin, dan jangan ganggu performa
-            aplikasi.
+            Track errors that break user experiences, alert the right engineer immediately, and
+            never degrade your application's performance.
           </strong>
         </P>
         <P>
-          Sistem ini fokus pada satu pilar utama: Application Performance Monitoring (APM) / Error
-          Monitoring. SDK ultra-ringan menangkap <em>stack trace</em>, konteks HTTP (URL dan
-          method), serta nama environment tepat di milidetik terjadinya <em>crash</em> atau{" "}
-          <em>unhandled exception</em>.
+          The platform operates strictly as an Application Performance Monitoring (APM) and error
+          tracking pipe. Lightweight SDKs capture crash stack traces, HTTP request context (URL and
+          method), environment tags, and client metadata within milliseconds of an exception,
+          streaming them to the nearest Cloudflare edge.
         </P>
 
-        <Callout tone="brand" title="Arsitektur edge-first">
-          Seluruh <em>ingestion layer</em> dibangun di atas Cloudflare Workers. Payload error dari
-          aplikasi Anda diterima di edge terdekat dan langsung ditulis ke D1, tanpa antrean, tanpa
-          worker tambahan, dan tanpa satu pun komponen yang harus selalu berjalan di server pusat.
+        <Callout tone="brand" title="Serverless & Edge-First" icon={CheckCircle2}>
+          The entire ingestion pipeline runs on Cloudflare Workers and Cloudflare D1. Inbound error
+          batches are processed directly at the edge closest to your servers, persisted with
+          prepared statements, and broadcast to Telegram without persistent background worker VMs or
+          external polling queues.
         </Callout>
+
+        <div className="panel mb-8 p-4">
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Supported Environments, Frameworks & Architectures
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">Node.js</Badge>
+            <Badge variant="outline">Bun</Badge>
+            <Badge variant="outline">Express.js</Badge>
+            <Badge variant="outline">Hono</Badge>
+            <Badge variant="outline">Fastify</Badge>
+            <Badge variant="outline">Next.js</Badge>
+            <Badge variant="outline">NestJS</Badge>
+            <Badge variant="outline">Remix / Astro</Badge>
+            <Badge variant="outline">React / Vite</Badge>
+            <Badge variant="outline">Vue / Svelte</Badge>
+            <Badge variant="outline">Docker & K8s</Badge>
+            <Badge variant="outline">Monorepos (Turborepo/Nx)</Badge>
+            <Badge variant="outline">Python</Badge>
+            <Badge variant="outline">Go</Badge>
+            <Badge variant="outline">PHP / Laravel</Badge>
+          </div>
+        </div>
       </>
     ),
   },
   {
-    id: "memulai",
-    title: "Langkah Awal (Setup)",
+    id: "getting-started",
+    title: "Getting Started",
     icon: ListChecks,
     content: (
       <>
         <P>
-          Mengintegrasikan WebWatch dapat diselesaikan dalam hitungan menit. Alurnya sepenuhnya{" "}
-          <em>self-service</em>.
+          Onboarding a new application to WebWatch takes less than two minutes. The workflow is
+          fully self-service and requires no complex configuration files.
         </P>
 
-        <H3>1. Verifikasi Kepemilikan Domain</H3>
+        <H3>1. Register Your Application</H3>
+        <OL>
+          <li>
+            Log in to the WebWatch dashboard via email OTP (connected to your Telegram account).
+          </li>
+          <li>
+            Create a new site entry with your application's URL or identifier (e.g.,{" "}
+            <IC>https://api.myapp.com</IC>).
+          </li>
+          <li>
+            Navigate to the site details to generate a dedicated API Key (prefixed with <IC>ww_</IC>
+            ).
+          </li>
+        </OL>
+
+        <H3>2. Domain Verification</H3>
         <P>
-          Sebelum sistem menerima log APM untuk sebuah situs, Anda harus membuktikan bahwa domain
-          tersebut benar-benar milik Anda. Tujuannya: mencegah pihak lain mengaitkan domain orang
-          lain ke akun mereka.
+          Before the ingestion endpoint accepts error logs for a site, you must complete domain
+          ownership verification:
         </P>
         <OL>
           <li>
-            Buka <strong className="text-foreground">Sites</strong> lalu pilih situs Anda di
-            dashboard, lalu salin token verifikasi yang ditampilkan pada dialog{" "}
-            <em>Verifikasi Domain</em>.
+            In the site detail page on your dashboard, locate the verification token under the{" "}
+            <em>Domain Verification</em> card.
           </li>
           <li>
-            Buat file bernama <IC>webwatch-verify.txt</IC> di web root / document root situs Anda,
-            lalu isi dengan token tersebut tanpa teks tambahan.
+            Create a plain text file named <IC>webwatch-verify.txt</IC> in your site's web root (so
+            it is reachable via <IC>GET https://&lt;your-domain&gt;/webwatch-verify.txt</IC>) and
+            paste the token as its content.
           </li>
           <li>
-            Kembali ke dashboard dan tekan <strong className="text-foreground">Verifikasi</strong>.
+            Click <strong className="text-foreground">Verifikasi Domain</strong> in the dashboard
+            (or call <IC>POST /api/sites/verify</IC>).
           </li>
         </OL>
-        <P>
-          Verifikasi dilakukan dengan melakukan request{" "}
-          <IC>GET &lt;url-situs-anda&gt;/webwatch-verify.txt</IC> menggunakan user-agent{" "}
-          <IC>WebWatch-Verifier/1.0</IC> dan timeout 10 detik. Status situs berubah menjadi{" "}
-          <IC>verified</IC> bila isi file mengandung token yang cocok.
-        </P>
 
-        <Callout tone="warning" title="Dampak verifikasi">
-          Selama status masih <IC>pending</IC>, endpoint ingestion akan menjawab{" "}
-          <IC>403 site_not_verified</IC> untuk situs tersebut. Tidak ada log error yang diterima
-          sebelum verifikasi selesai.
+        <Callout tone="warning" title="Ingestion Guard" icon={AlertTriangle}>
+          While the site remains in <IC>pending</IC> verification status, the ingestion endpoint
+          rejects incoming batches with <IC>403 site_not_verified</IC>. Once verified, all telemetry
+          sent with your site's API key is accepted and persisted immediately.
         </Callout>
 
-        <H3>2. Manajemen Lingkungan (Environments)</H3>
+        <Callout
+          tone="info"
+          title="Backend APIs & Microservices (Docker / Express / Hono)"
+          icon={Info}
+        >
+          If your application is a headless backend API without a static file root, you can easily
+          fulfill domain verification with a lightweight route handler:
+          <CodeBlock
+            className="mt-3"
+            code={`// Express.js
+app.get("/webwatch-verify.txt", (req, res) => res.send("your_verification_token"));
+
+// Hono
+app.get("/webwatch-verify.txt", (c) => c.text("your_verification_token"));
+
+// Fastify
+fastify.get("/webwatch-verify.txt", async (request, reply) => "your_verification_token");`}
+          />
+        </Callout>
+
+        <H3>3. Managing Environments</H3>
         <P>
-          Setiap environment sebaiknya memakai{" "}
-          <strong className="text-foreground">situs terpisah</strong> di dashboard, karena API key
-          selalu terikat pada satu situs. Field <IC>environment</IC> pada tiap event APM menutup
-          kebutuhan penandaan environment.
+          We recommend creating separate site entries for production and staging environments so
+          alert routing and API keys remain isolated:
         </P>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Environment</TableHead>
-              <TableHead>Saran penggunaan</TableHead>
-              <TableHead>Alerting</TableHead>
+              <TableHead>Recommended Usage</TableHead>
+              <TableHead>Alert Routing</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -239,246 +286,381 @@ const DOCS_SECTIONS = [
               <TableCell>
                 <IC>production</IC>
               </TableCell>
-              <TableCell>Situs dan API key khusus produksi. Wajib diamankan.</TableCell>
-              <TableCell>
-                Kirim ke grup Telegram tim <em>on-call</em>.
-              </TableCell>
+              <TableCell>Production deployments. Strict API key protection.</TableCell>
+              <TableCell>Primary on-call Telegram team channel or chat.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
                 <IC>staging</IC>
               </TableCell>
-              <TableCell>Situs terpisah dengan key sendiri. Bebas di-rotasi.</TableCell>
-              <TableCell>Grup internal, atau tanpa notifikasi sama sekali.</TableCell>
+              <TableCell>Pre-production and QA environments. Can be rotated freely.</TableCell>
+              <TableCell>Internal dev group or quiet logging.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
-                <IC>local</IC>
+                <IC>development</IC>
               </TableCell>
-              <TableCell>
-                Jangan panggil <IC>init()</IC> di pengembangan lokal.
-              </TableCell>
-              <TableCell>Tidak dikirim.</TableCell>
+              <TableCell>Local testing. Omit SDK initialization to stay dormant.</TableCell>
+              <TableCell>Disabled (no Telegram spam).</TableCell>
             </TableRow>
           </TableBody>
         </Table>
         <P className="mt-4 text-sm">
-          Nilai environment dikirim otomatis oleh SDK dari <IC>process.env.NODE_ENV</IC> saat
-          tersedia, dan bernilai <IC>production</IC> di browser. Anda juga dapat mengirimnya manual
-          saat memanggil <IC>capture()</IC>.
+          The <IC>environment</IC> tag is automatically derived by the SDK from{" "}
+          <IC>process.env.NODE_ENV</IC> when running on Node.js/Bun, and defaults to{" "}
+          <IC>production</IC> in the browser. You can also override it manually on any custom event.
         </P>
-      </>
-    ),
-  },
-  {
-    id: "sdk-frontend",
-    title: "SDK Frontend Terperinci",
-    icon: Code,
-    content: (
-      <>
-        <P>
-          SDK WebWatch adalah satu file ES module yang disajikan langsung dari deployment Anda
-          sendiri melalui <IC>GET /api/public/sdk</IC>, jadi tidak ada CDN pihak ketiga yang perlu
-          dipercaya. Responsnya memakai header <IC>application/javascript</IC>, CORS terbuka untuk
-          semua origin, dan di-cache selama satu jam.
-        </P>
-
-        <H3>Instalasi</H3>
-        <CodeBlock
-          file="main.js"
-          className="mb-6"
-          code={`import { WebWatch } from "https://webwatch.example/api/public/sdk";
-
-WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");`}
-        />
-
-        <H3>Apa saja yang otomatis ditangkap?</H3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Sumber</TableHead>
-              <TableHead>event_type</TableHead>
-              <TableHead>Informasi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>
-                <IC>window</IC> <em>error</em>
-              </TableCell>
-              <TableCell>
-                <IC>frontend_error</IC>
-              </TableCell>
-              <TableCell>Pesan error, stack trace, URL halaman saat ini.</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>window</IC> <em>unhandledrejection</em>
-              </TableCell>
-              <TableCell>
-                <IC>frontend_promise_error</IC>
-              </TableCell>
-              <TableCell>Alasan promise ditolak tanpa ditangani.</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Manual</TableCell>
-              <TableCell>
-                <IC>api_error</IC>, <IC>log</IC>
-              </TableCell>
-              <TableCell>Anda menentukan tipe, pesan, dan konteksnya.</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-
-        <H3>Pengiriman manual</H3>
-        <CodeBlock
-          file="checkout.js"
-          className="mb-6"
-          code={`await WebWatch.capture(
-  "api_error",
-  "Payment gateway timeout",
-  error?.stack ?? null,
-  "/api/checkout",
-  "POST"
-);`}
-        />
-
-        <H3>API SDK</H3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Method</TableHead>
-              <TableHead>Deskripsi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>
-                <IC>init(key, endpoint?)</IC>
-              </TableCell>
-              <TableCell>
-                Menyimpan API key dan endpoint ingestion (default <IC>/api/ingest</IC>), lalu
-                memasang listener error. Panggil sekali saat aplikasi start.
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>capture(type, message, stackTrace, url, method)</IC>
-              </TableCell>
-              <TableCell>
-                Mengirim satu event. Tidak melakukan apa-apa bila <IC>init()</IC> belum dipanggil.
-                Kegagalan pengiriman selalu ditelan agar aplikasi Anda tidak pernah terganggu.
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>expressErrorHandler()</IC>
-              </TableCell>
-              <TableCell>
-                Middleware Express untuk menangkap error backend. Lihat bagian berikut.
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-
-        <Callout tone="neutral" title="Self-hosted dan same-origin">
-          <p>
-            Bila endpoint yang Anda berikan diawali <IC>http</IC>, SDK memakainya apa adanya. Bila
-            tidak, endpoint dipetakan ke <IC>window.location.origin</IC>, sehingga deployment
-            same-origin tanpa konfigurasi tambahan ikut berfungsi.
-          </p>
-        </Callout>
       </>
     ),
   },
   {
     id: "backend-nodejs",
-    title: "Backend: Node.js & Express",
+    title: "Backend: @webwatch/sdk",
     icon: Server,
     content: (
       <>
         <P>
-          Untuk menangkap error backend, SDK menyediakan satu middleware Express. Middleware ini
-          mengambil konteks request (URL dan method) sebelum error diteruskan ke handler bawaan
-          Express.
+          For Node.js, Bun, and modern JavaScript runtimes, the official <IC>@webwatch/sdk</IC> npm
+          package provides zero-config automatic crash capture with in-memory batching, exponential
+          retry, and pre-built framework middleware.
         </P>
 
-        <H3>Express.js Middleware</H3>
-        <P>
-          Middleware error WebWatch harus ditempatkan{" "}
-          <strong className="text-foreground">setelah</strong> semua route dan middleware Anda,
-          tepat sebelum handler fallback bawaan Express.
-        </P>
+        <H3>Installation</H3>
         <CodeBlock
-          file="server.js"
+          file="terminal"
           className="mb-6"
-          code={`import express from "express";
-import { WebWatch } from "https://webwatch.example/api/public/sdk";
-
-const app = express();
-app.use(express.json());
-
-WebWatch.init("ww_your_api_key", "https://webwatch.example/api/ingest");
-
-// ... route dan controller Anda di sini ...
-
-// Terakhir: tangkap error backend
-app.use(WebWatch.expressErrorHandler());
-
-app.listen(3000);`}
+          code={`npm install @webwatch/sdk
+# or
+bun add @webwatch/sdk
+# or
+pnpm add @webwatch/sdk`}
         />
 
-        <Callout tone="warning" title="Perhatian terhadap asynchronous error">
-          Di Express 4.x, <em>promise</em> yang gagal secara <em>asynchronous</em>, seperti query
-          database di dalam route <IC>async</IC>, tidak otomatis tertangkap oleh error middleware.
-          Bungkus controller Anda dengan utilitas seperti <IC>express-async-handler</IC>, atau
-          tangkap manual dengan <IC>next(err)</IC>.
-        </Callout>
-
-        <H3>Framework lain</H3>
+        <H3>Zero-Config Setup</H3>
         <P>
-          Middleware Express hanyalah salah satu pintasan. Untuk framework apa pun, panggil{" "}
-          <IC>capture()</IC> dari blok <IC>catch</IC> Anda:
+          Export the two environment variables, then import the SDK once at the root entrypoint of
+          your application:
         </P>
         <CodeBlock
-          file="handler.js"
+          file=".env"
+          className="mb-4"
+          code={`WEBWATCH_KEY="ww_your_site_api_key"
+WEBWATCH_URL="https://your-webwatch-instance.com"`}
+        />
+        <CodeBlock
+          file="index.js"
           className="mb-6"
-          code={`try {
-  await doWork();
+          code={`// Import once before importing anything else
+import "@webwatch/sdk";
+
+// Uncaught exceptions and unhandled rejections are now automatically captured!`}
+        />
+
+        <H3>Framework Middleware Helpers</H3>
+        <P>
+          Web frameworks often catch asynchronous errors inside route handlers before they trigger
+          global unhandled rejections. Use our dedicated framework helpers to ensure complete
+          coverage:
+        </P>
+
+        <div className="space-y-6">
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Express.js</h4>
+            <CodeBlock
+              file="app.js"
+              code={`import express from "express";
+import { expressErrorMiddleware, wrapAsync } from "@webwatch/sdk/express";
+
+const app = express();
+
+app.get(
+  "/api/checkout",
+  wrapAsync(async (req, res) => {
+    // Any rejected promise inside wrapAsync is passed to the error handler
+    const result = await processOrder(req.body);
+    res.json(result);
+  })
+);
+
+// Register after all your routes
+app.use(expressErrorMiddleware());
+
+app.listen(3000);`}
+            />
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Hono</h4>
+            <CodeBlock
+              file="index.ts"
+              code={`import { Hono } from "hono";
+import { honoOnError } from "@webwatch/sdk/hono";
+
+const app = new Hono();
+
+// Global error handler captures exceptions and returns 500 JSON response
+app.onError(honoOnError());
+
+app.get("/", (c) => c.text("Hello World"));
+export default app;`}
+            />
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Fastify</h4>
+            <CodeBlock
+              file="server.js"
+              code={`import Fastify from "fastify";
+import { fastifyErrorHandler } from "@webwatch/sdk/fastify";
+
+const fastify = Fastify({ logger: true });
+
+fastify.setErrorHandler(fastifyErrorHandler());
+
+fastify.listen({ port: 3000 });`}
+            />
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Next.js</h4>
+            <CodeBlock
+              file="instrumentation.ts"
+              code={`// Place in project root or src/ directory
+export async function register() {
+  await import("@webwatch/sdk/next").then((m) => m.register());
+}`}
+            />
+          </div>
+        </div>
+
+        <H3>Manual Error Capture</H3>
+        <P>Capture exceptions manually inside specific try-catch blocks:</P>
+        <CodeBlock
+          file="services/payment.js"
+          className="mb-6"
+          code={`import { captureError } from "@webwatch/sdk";
+
+try {
+  await chargeCard(amount);
 } catch (error) {
-  await WebWatch.capture(
-    "backend_error",
-    error.message,
-    error.stack,
-    request.url,
-    request.method
-  );
+  captureError(error, {
+    url: "/api/charge",
+    method: "POST",
+  });
   throw error;
 }`}
         />
 
-        <Callout tone="neutral" title="Tentang paket npm">
-          <p>
-            Source paket <IC>@webwatch/sdk</IC> sudah tersedia di registry npm. Set env{" "}
-            <IC>WEBWATCH_KEY</IC> dan <IC>WEBWATCH_URL</IC>, lalu{" "}
-            <IC>{'import "@webwatch/sdk"'}</IC> sekali di entrypoint: unhandled error dan unhandled
-            rejection langsung terkirim dengan batching dan retry. Helper siap pakai tersedia untuk
-            Express, Hono, Fastify, dan Next.js. Untuk browser tanpa npm, gunakan modul yang
-            disajikan dari <IC>/api/public/sdk</IC>.
-          </p>
+        <H3>Other JavaScript Runtimes (NestJS, Remix, Astro, Koa)</H3>
+        <P>
+          For any Node.js, Bun, or edge JavaScript application, you do not need dedicated framework
+          middleware. Simply importing <IC>@webwatch/sdk</IC> once at your application root
+          automatically sets up process-level error listeners:
+        </P>
+        <CodeBlock
+          file="main.ts"
+          className="mb-6"
+          code={`// Place at the very top of your application entrypoint
+import "@webwatch/sdk";
+
+// NestJS example:
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();`}
+        />
+
+        <Callout tone="brand" title="In-Memory Queue & Resiliency" icon={CheckCircle2}>
+          The SDK buffers events in memory (up to 1,000 entries) and flushes in batches of 50 events
+          or every 5 seconds. Failed network requests are retried up to 3 times with exponential
+          backoff. Duplicate errors within a 5-second interval are throttled to prevent cascading
+          alert storms.
         </Callout>
       </>
     ),
   },
   {
+    id: "docker-monorepo",
+    title: "Docker & Monorepo Deployments",
+    icon: Container,
+    content: (
+      <>
+        <P>
+          Modern applications frequently ship inside containerized environments (Docker, Kubernetes)
+          or are organized across multi-package monorepos (Turborepo, Nx, pnpm workspaces). WebWatch
+          requires zero system-level agents, daemons, or volume mounts, making it completely
+          plug-and-play across container boundaries.
+        </P>
+
+        <H3>Docker & Container Deployments</H3>
+        <P>
+          WebWatch requires no container agents, daemon processes, or sidecar containers. Simply
+          pass your site API key and WebWatch URL as environment variables to your container:
+        </P>
+        <CodeBlock
+          file="docker-compose.yml"
+          className="mb-4"
+          code={`services:
+  backend-api:
+    build: .
+    environment:
+      - NODE_ENV=production
+      - WEBWATCH_KEY=ww_your_site_api_key
+      - WEBWATCH_URL=https://your-webwatch-instance.com
+    ports:
+      - "3000:3000"`}
+        />
+        <CodeBlock
+          file="Dockerfile"
+          className="mb-6"
+          code={`FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+# Environment variables are supplied at runtime via docker run -e or docker-compose
+CMD ["node", "dist/index.js"]`}
+        />
+
+        <H3>Monorepo Architecture (Turborepo, Nx, pnpm workspaces)</H3>
+        <P>
+          In a monorepo setup with multiple applications (such as <IC>apps/web</IC> and{" "}
+          <IC>apps/api</IC>), you can choose between two isolation models:
+        </P>
+        <UL>
+          <li>
+            <strong className="text-foreground">Isolated Sites (Recommended):</strong> Create a
+            dedicated site entry for each service in the WebWatch dashboard. Each service receives
+            its own API key (<IC>ww_api_...</IC> vs <IC>ww_web_...</IC>), keeping Telegram error
+            alerts and exception logs cleanly partitioned.
+          </li>
+          <li>
+            <strong className="text-foreground">Unified Project:</strong> Share one API key across
+            all services in the workspace and differentiate them via the <IC>environment</IC> tag
+            (e.g., <IC>production-web</IC>, <IC>production-api</IC>).
+          </li>
+        </UL>
+
+        <Callout tone="info" title="Verifying Headless APIs in Docker or Monorepos" icon={Info}>
+          If your backend container or microservice does not serve static files from a document
+          root, simply expose a lightweight 1-line route to serve your verification token:
+          <CodeBlock
+            className="mt-3"
+            code={`// Express.js
+app.get("/webwatch-verify.txt", (req, res) => res.send("your_verification_token"));
+
+// Hono
+app.get("/webwatch-verify.txt", (c) => c.text("your_verification_token"));
+
+// Fastify
+fastify.get("/webwatch-verify.txt", async () => "your_verification_token");`}
+          />
+        </Callout>
+      </>
+    ),
+  },
+  {
+    id: "sdk-frontend",
+    title: "Frontend: Browser Monitoring",
+    icon: Code,
+    content: (
+      <>
+        <P>
+          For client-side web applications, WebWatch offers two distribution channels: using the npm
+          package in bundled setups (Vite, Webpack, Next.js), or including the zero-install CDN ES
+          module directly.
+        </P>
+
+        <H3>Option A: Standalone CDN Script (Zero-Install)</H3>
+        <P>
+          Serve the SDK directly from your own WebWatch deployment without any third-party
+          dependencies:
+        </P>
+        <CodeBlock
+          file="index.html"
+          className="mb-6"
+          code={`<script type="module">
+  import { WebWatch } from "https://your-webwatch-instance.com/api/public/sdk";
+
+  WebWatch.init("ww_your_site_api_key", "https://your-webwatch-instance.com/api/ingest");
+</script>`}
+        />
+
+        <H3>Option B: Bundled Webpack / Vite App</H3>
+        <CodeBlock
+          file="src/main.ts"
+          className="mb-6"
+          code={`import { init } from "@webwatch/sdk";
+
+init("ww_your_site_api_key", {
+  endpoint: "https://your-webwatch-instance.com/api/ingest",
+});`}
+        />
+
+        <H3>Automatically Captured Browser Events</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event Source</TableHead>
+              <TableHead>event_type</TableHead>
+              <TableHead>Payload Metadata</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>window.onerror</IC>
+              </TableCell>
+              <TableCell>
+                <Badge variant="danger" className="font-mono text-xs">
+                  frontend_error
+                </Badge>
+              </TableCell>
+              <TableCell>
+                Error message, file source, line/column, stack trace, current URL
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>unhandledrejection</IC>
+              </TableCell>
+              <TableCell>
+                <Badge variant="warning" className="font-mono text-xs">
+                  backend_error / frontend_promise_error
+                </Badge>
+              </TableCell>
+              <TableCell>
+                Rejected promise reason, stack trace, active page URL (sent as{" "}
+                <IC>frontend_promise_error</IC> in standalone CDN SDK or <IC>backend_error</IC> in{" "}
+                <IC>@webwatch/sdk</IC>)
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        <H3>Sensitive Data Scrubbing</H3>
+        <P>
+          Before transmitting error reports from the browser, the SDK automatically sanitizes
+          sensitive query parameters (such as <IC>password</IC>, <IC>token</IC>, <IC>api_key</IC>,
+          and <IC>auth</IC>) from URL strings, replacing them with <IC>[REDACTED]</IC>.
+        </P>
+      </>
+    ),
+  },
+  {
     id: "rest-api",
-    title: "Referensi REST API (Manual Ingestion)",
+    title: "Ingestion REST API Reference",
     icon: Database,
     content: (
       <>
         <P>
-          Selain memakai SDK, Anda bebas membangun integrasi custom dengan bahasa pemrograman apa
-          pun yang bisa melakukan HTTP request ke endpoint ingestion kami.
+          If you are integrating applications in Python, Go, Rust, Ruby, or shell scripts, you can
+          post error events directly to the HTTP ingestion endpoint.
         </P>
 
         <div className="panel mb-8 overflow-hidden">
@@ -486,357 +668,405 @@ app.listen(3000);`}
             <h4 className="font-mono text-sm font-semibold text-foreground">
               POST{" "}
               <span className="ml-2 font-normal text-muted-foreground">
-                https://webwatch.example/api/ingest
+                https://your-webwatch-instance.com/api/ingest
               </span>
             </h4>
           </div>
           <div className="space-y-6 px-4 py-4">
             <div>
-              <h5 className="mb-2 text-sm font-semibold text-foreground">Autentikasi header</h5>
-              <CodeBlock className="mb-2" code={`Authorization: Bearer [API_KEY]`} />
+              <h5 className="mb-2 text-sm font-semibold text-foreground">Authorization Header</h5>
+              <CodeBlock className="mb-2" code={`Authorization: Bearer ww_your_site_api_key`} />
               <p className="text-sm text-muted-foreground">
-                API key dibuat per situs di halaman detail situs, pada bagian{" "}
-                <strong className="text-foreground">API Keys</strong>, dengan format <IC>ww_</IC>{" "}
-                diikuti 48 karakter heksadesimal.
+                Pass your 48-character hexadecimal site API key preceded by the <IC>ww_</IC> prefix.
               </p>
             </div>
 
             <div>
-              <h5 className="mb-2 text-sm font-semibold text-foreground">
-                Spesifikasi payload (JSON)
-              </h5>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Properti</TableHead>
-                    <TableHead>Tipe</TableHead>
-                    <TableHead>Wajib</TableHead>
-                    <TableHead>Deskripsi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">events</TableCell>
-                    <TableCell>Array</TableCell>
-                    <TableCell className="text-primary">Ya</TableCell>
-                    <TableCell>Daftar event yang dikirim dalam satu batch.</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">type</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell className="text-primary">Ya</TableCell>
-                    <TableCell>
-                      Tipe event, misalnya <IC>frontend_error</IC>, <IC>frontend_promise_error</IC>,{" "}
-                      <IC>backend_error</IC>, <IC>api_error</IC>, atau <IC>log</IC>. Default{" "}
-                      <IC>log</IC>.
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">message</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell className="text-primary">Ya</TableCell>
-                    <TableCell>Pesan utama error atau ringkasan log.</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">stack_trace</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell>Tidak</TableCell>
-                    <TableCell>Jejak stack error.</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">url</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell>Tidak</TableCell>
-                    <TableCell>URL halaman atau endpoint yang bermasalah.</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">method</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell>Tidak</TableCell>
-                    <TableCell>
-                      HTTP method, misalnya <IC>GET</IC> atau <IC>POST</IC>.
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">environment</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell>Tidak</TableCell>
-                    <TableCell>
-                      Nama environment. Default <IC>production</IC>.
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-mono text-foreground">user_agent</TableCell>
-                    <TableCell>String</TableCell>
-                    <TableCell>Tidak</TableCell>
-                    <TableCell>User agent klien bila Anda ingin mengirimnya.</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <h5 className="mb-2 text-sm font-semibold text-foreground">Request Body (JSON)</h5>
+              <CodeBlock
+                code={`{
+  "events": [
+    {
+      "type": "backend_error",
+      "message": "Connection to PostgreSQL primary failed",
+      "environment": "production",
+      "stack_trace": "Error: connect ECONNREFUSED 10.0.0.4:5432\\n    at TCPConnectWrap.afterConnect",
+      "url": "/api/v1/orders",
+      "method": "POST",
+      "user_agent": "checkout-service/2.4.0 (linux-arm64)"
+    }
+  ]
+}`}
+              />
             </div>
           </div>
         </div>
 
-        <H3>Contoh request dan response</H3>
-        <CodeBlock
-          file="curl"
-          className="mb-6"
-          code={`curl -X POST "https://webwatch.example/api/ingest" \\
-  -H "Authorization: Bearer ww_your_api_key" \\
+        <H3>Field Reference</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Field</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Required</TableHead>
+              <TableHead>Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>events</IC>
+              </TableCell>
+              <TableCell>Array</TableCell>
+              <TableCell>Yes</TableCell>
+              <TableCell>Array of error event objects (1 to 50 items per batch).</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].type</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>Yes</TableCell>
+              <TableCell>
+                Event classifier (e.g., <IC>backend_error</IC>, <IC>frontend_error</IC>,{" "}
+                <IC>database_error</IC>).
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].message</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>Yes</TableCell>
+              <TableCell>The primary error or exception message.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].environment</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>No</TableCell>
+              <TableCell>
+                Environment identifier (defaults to <IC>production</IC>).
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].stack_trace</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>No</TableCell>
+              <TableCell>Full stack trace string.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].url</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>No</TableCell>
+              <TableCell>Path or URL where the error occurred.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>events[].method</IC>
+              </TableCell>
+              <TableCell>String</TableCell>
+              <TableCell>No</TableCell>
+              <TableCell>HTTP verb (GET, POST, PUT, DELETE, etc.).</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        <H3>API Responses & Error Codes</H3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>HTTP Status</TableHead>
+              <TableHead>Response Body</TableHead>
+              <TableHead>Cause</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <IC>200 OK</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{"ok": true, "ingested": 1}'}</IC>
+              </TableCell>
+              <TableCell>Events accepted and persisted to Cloudflare D1.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>401 Unauthorized</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{"error": "missing_token"}'}</IC>
+              </TableCell>
+              <TableCell>Missing or malformed Authorization header.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>401 Unauthorized</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{"error": "invalid_key"}'}</IC>
+              </TableCell>
+              <TableCell>API key was not found or belongs to an unrecognized site.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>403 Forbidden</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{"error": "site_not_verified"}'}</IC>
+              </TableCell>
+              <TableCell>
+                The site has not yet verified domain ownership via webwatch-verify.txt.
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>400 Bad Request</IC>
+              </TableCell>
+              <TableCell>
+                <IC>{'{"error": "invalid_payload"}'}</IC>
+              </TableCell>
+              <TableCell>Payload is not valid JSON or events array is malformed.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        <H3>Code Examples</H3>
+        <div className="space-y-6">
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">cURL</h4>
+            <CodeBlock
+              file="terminal"
+              code={`curl -X POST https://your-webwatch-instance.com/api/ingest \\
+  -H "Authorization: Bearer ww_your_site_api_key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "events": [
       {
         "type": "backend_error",
-        "message": "TypeError: cannot read property id of undefined",
-        "stack_trace": "TypeError: ...",
-        "url": "/api/orders/42",
-        "method": "GET",
+        "message": "Upstream service timeout",
         "environment": "production"
       }
     ]
   }'`}
-        />
+            />
+          </div>
 
-        <H3>Kode respons</H3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Status</TableHead>
-              <TableHead>Body</TableHead>
-              <TableHead>Arti</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>
-                <IC>200</IC>
-              </TableCell>
-              <TableCell>
-                <IC>{'{ "ok": true, "ingested": 1 }'}</IC>
-              </TableCell>
-              <TableCell>Event berhasil disimpan.</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>400</IC>
-              </TableCell>
-              <TableCell>
-                <IC>invalid_payload</IC> atau <IC>bad_request</IC>
-              </TableCell>
-              <TableCell>
-                Body JSON tidak valid atau <IC>events</IC> bukan array.
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>401</IC>
-              </TableCell>
-              <TableCell>
-                <IC>missing_token</IC> atau <IC>invalid_key</IC>
-              </TableCell>
-              <TableCell>Header Authorization hilang atau API key tidak dikenal.</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <IC>403</IC>
-              </TableCell>
-              <TableCell>
-                <IC>site_not_verified</IC>
-              </TableCell>
-              <TableCell>Domain situs belum diverifikasi.</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Python</h4>
+            <CodeBlock
+              file="telemetry.py"
+              code={`import requests
 
-        <P className="text-sm">
-          <strong className="text-foreground">Catatan:</strong> endpoint ingestion mengizinkan semua
-          origin (CORS <IC>*</IC>) agar SDK browser dapat mengirim dari domain pelanggan, dan saat
-          ini belum membatasi laju request secara otomatis. Bila Anda membutuhkan pembatasan,
-          tambahkan sendiri di sisi aplikasi Anda.
-        </P>
+def report_error(err_type, message, stack=""):
+    url = "https://your-webwatch-instance.com/api/ingest"
+    headers = {
+        "Authorization": "Bearer ww_your_site_api_key",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "events": [{
+            "type": err_type,
+            "message": message,
+            "stack_trace": stack,
+            "environment": "production"
+        }]
+    }
+    requests.post(url, json=payload, headers=headers, timeout=5)`}
+            />
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">Go</h4>
+            <CodeBlock
+              file="telemetry.go"
+              code={`package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"time"
+)
+
+type Event struct {
+	Type        string \`json:"type"\`
+	Message     string \`json:"message"\`
+	Environment string \`json:"environment"\`
+}
+
+func reportError(errMsg string) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"events": []Event{{Type: "backend_error", Message: errMsg, Environment: "production"}},
+	})
+	req, _ := http.NewRequest("POST", "https://your-webwatch-instance.com/api/ingest", bytes.NewBuffer(payload))
+	req.Header.Set("Authorization", "Bearer ww_your_site_api_key")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	client.Do(req)
+}`}
+            />
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-foreground">PHP (Laravel / Symfony)</h4>
+            <CodeBlock
+              file="app/Exceptions/Handler.php"
+              code={`use Illuminate\\Support\\Facades\\Http;
+
+// In your Laravel exception handler or middleware
+Http::withToken('ww_your_site_api_key')
+    ->timeout(5)
+    ->post('https://your-webwatch-instance.com/api/ingest', [
+        'events' => [
+            [
+                'type' => 'backend_error',
+                'message' => $exception->getMessage(),
+                'stack_trace' => $exception->getTraceAsString(),
+                'environment' => config('app.env', 'production'),
+                'url' => request()->fullUrl(),
+                'method' => request()->method(),
+            ]
+        ]
+    ]);`}
+            />
+          </div>
+        </div>
       </>
     ),
   },
   {
     id: "alerting",
-    title: "Sistem Alerting & Perintah Bot",
-    icon: MessageSquare,
+    title: "Telegram Alerting & Notifications",
+    icon: Bell,
     content: (
       <>
         <P>
-          Tujuan utama <em>monitoring</em> adalah memberi tahu Anda di saat yang tepat. WebWatch
-          mengirim seluruh notifikasi melalui Telegram, dengan aturan anti-spam yang mencegah banjir
-          pesan (<em>alert fatigue</em>).
+          WebWatch leverages Telegram as its primary alerting delivery vehicle. Critical runtime
+          crashes trigger immediate push alerts with HTML formatting, environment badges, and stack
+          trace snippets.
         </P>
 
-        <H3>Kapan notifikasi dikirim?</H3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Pemicu</TableHead>
-              <TableHead>Pesan</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>Batch APM memuat event bertipe error</TableCell>
-              <TableCell>
-                <Badge variant="info">APM ALERT</Badge>{" "}
-                <span className="text-muted-foreground">
-                  tipe, environment, pesan, endpoint yang terkena.
-                </span>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Proses login dengan kode OTP</TableCell>
-              <TableCell>
-                <Badge variant="neutral">KODE MASUK</Badge>{" "}
-                <span className="text-muted-foreground">
-                  kode 6 digit, berlaku 5 menit dan dipakai sekali.
-                </span>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-
-        <H3>Aturan anti-spam</H3>
-        <UL>
+        <H3>Linking Your Telegram Account</H3>
+        <OL>
           <li>
-            Dari satu batch APM, hanya{" "}
-            <strong className="text-foreground">event error pertama</strong> yang diumumkan lewat
-            Telegram. Sisanya tetap tercatat dan dapat dilihat di halaman{" "}
-            <strong className="text-foreground">Log Error (APM)</strong>.
+            Visit the{" "}
+            <Link to="/auth" className="font-semibold text-primary underline">
+              /auth
+            </Link>{" "}
+            page.
           </li>
-          <li>Notifikasi hanya dikirim ke chat Telegram yang sudah terhubung dengan akun Anda.</li>
-        </UL>
+          <li>
+            Click the <IC>Connect Telegram</IC> link, which opens a direct conversation with your
+            bot:
+            <IC>https://t.me/your_bot?start=&lt;token&gt;</IC>.
+          </li>
+          <li>
+            Tap <IC>Start</IC> in Telegram. Your chat ID is automatically paired with your account.
+          </li>
+        </OL>
 
-        <H3>Perintah bot Telegram</H3>
-        <P>
-          Bot WebWatch juga menjadi antarmuka manajemen. Kirim perintah berikut ke chat bot Anda.
-        </P>
+        <H3>Telegram Bot Commands</H3>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Perintah</TableHead>
-              <TableHead>Fungsi</TableHead>
+              <TableHead>Command</TableHead>
+              <TableHead>Description</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
               <TableCell>
-                <IC>/start</IC>
+                <IC>/start [token]</IC>
               </TableCell>
-              <TableCell>Menghubungkan chat Telegram dengan akun Anda.</TableCell>
+              <TableCell>Links Telegram chat or initiates the bot session.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
                 <IC>/help</IC>
               </TableCell>
-              <TableCell>Menampilkan daftar perintah.</TableCell>
+              <TableCell>Displays available commands and platform help.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
                 <IC>/addsite &lt;url&gt;</IC>
               </TableCell>
-              <TableCell>Menambahkan situs untuk menerima log error.</TableCell>
+              <TableCell>Quickly registers a new site directly from Telegram.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
                 <IC>/listsite</IC>
               </TableCell>
-              <TableCell>Menampilkan daftar situs beserta status verifikasinya.</TableCell>
+              <TableCell>Lists all registered sites, status, and IDs.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
                 <IC>/removesite &lt;id&gt;</IC>
               </TableCell>
-              <TableCell>Menghapus situs.</TableCell>
+              <TableCell>Removes a site by full ID or 8-character prefix.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>
-                <IC>/pause &lt;id&gt;</IC> atau <IC>/resume &lt;id&gt;</IC>
+                <IC>/pause &lt;id&gt;</IC>
               </TableCell>
-              <TableCell>Menjeda atau melanjutkan penerimaan log error.</TableCell>
+              <TableCell>Temporarily pauses APM telemetry collection for a site.</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <IC>/resume &lt;id&gt;</IC>
+              </TableCell>
+              <TableCell>Resumes APM telemetry collection for a site.</TableCell>
             </TableRow>
           </TableBody>
         </Table>
 
-        <Callout tone="neutral" title="Cara identifier situs dibaca" icon={Terminal}>
-          <p>
-            <IC>id</IC> yang dimaksud adalah 8 karakter pertama dari id situs. Pencocokan dilakukan
-            dengan prefix, dan harus menghasilkan tepat satu situs.
-          </p>
+        <Callout tone="warning" title="Anti-Storm Suppression" icon={AlertTriangle}>
+          To protect on-call engineers from alert fatigue during cascading failures, identical error
+          events (matching message and error type) are throttled across a 5-second suppression
+          window.
         </Callout>
       </>
     ),
   },
   {
-    id: "keamanan-kepatuhan",
-    title: "Keamanan & Kepatuhan Data",
-    icon: Shield,
+    id: "security",
+    title: "Security & Data Privacy",
+    icon: ShieldAlert,
     content: (
       <>
         <P>
-          Karena kami mengumpulkan <em>stack trace</em> dan konteks request dari aplikasi Anda, kami
-          menjaga agar data sensitif pelanggan Anda tidak bocor.
+          WebWatch is designed from the ground up to respect data isolation and minimal privilege
+          principles.
         </P>
 
-        <div className="my-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="panel p-5">
-            <Lock className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">Tanpa password</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Tidak ada password yang disimpan maupun dipulihkan. Login memakai kode 6 digit sekali
-              pakai yang dikirim ke chat Telegram, berlaku 5 menit, dan dibatasi 5 kali percobaan.
-            </p>
-          </div>
-          <div className="panel p-5">
-            <Layers className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">Isolasi tenant</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Setiap data situs, event, dan API key terikat pada akun pemiliknya. Seluruh query
-              terautentikasi dijalankan dengan filter <IC>user_id</IC>, sehingga satu akun tidak
-              dapat membaca atau mengubah data akun lain.
-            </p>
-          </div>
-          <div className="panel p-5">
-            <Bug className="mb-3 h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 className="mb-2 text-base font-semibold text-foreground">Retensi data</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Event APM disimpan sebagai arsip dan dapat dihapus manual dari dashboard. Pembersihan
-              otomatis bisa dikonfigurasi.
-            </p>
-          </div>
-        </div>
-
-        <H3>Kredensial</H3>
-        <UL>
-          <li>Token sesi dan kode OTP disimpan dalam bentuk hash SHA-256, bukan nilai aslinya.</li>
-          <li>
-            Cookie sesi memakai flag <IC>HttpOnly</IC>, <IC>Secure</IC>, dan <IC>SameSite=Lax</IC>{" "}
-            dengan masa berlaku 30 hari.
-          </li>
-          <li>API key dibuat per situs dan dapat dicabut dengan menghapus key tersebut.</li>
-          <li>
-            Endpoint webhook Telegram dilindungi shared secret yang dibandingkan secara timing-safe.
-          </li>
-        </UL>
-
-        <H3>CORS pada endpoint ingestion</H3>
+        <H3>Edge-Isolated Execution</H3>
         <P>
-          Endpoint <IC>/api/ingest</IC> sengaja mengizinkan semua origin, karena SDK browser
-          mengirim dari domain pelanggan sendiri. Endpoint tersebut hanya menerima API key yang
-          valid, dan seluruh isinya dipisahkan per situs.
+          All request processing takes place in isolated V8 Worker isolates across Cloudflare's
+          global network. There are no long-lived servers, no shared filesystem memory, and no
+          persistent internal containers that can be compromised across tenants.
         </P>
 
-        <H3>Komitmen GDPR & CCPA</H3>
+        <H3>Passwordless Authentication</H3>
         <P>
-          Sistem kami dirancang agar beroperasi penuh sebagai <em>Data Processor</em>. Kami
-          menyarankan Anda, sebagai <em>Data Controller</em>, untuk tidak mengirim nama, email, atau
-          data pribadi pengguna secara terang (<em>plain-text</em>) ke server kami. Gunakan ID
-          samaran (<em>anonymized user ID</em>), dan hapus atau sensor setiap data sensitif sebelum
-          dikirim.
+          WebWatch completely avoids static passwords. Login codes (6-digit OTPs) are hashed with
+          SHA-256 before storage, expire within 5 minutes, enforce a maximum of 5 attempts, and
+          require an active Telegram handshake. Sessions are secured via <IC>HttpOnly</IC>,{" "}
+          <IC>SameSite=Lax</IC>, and <IC>Secure</IC> cookies.
+        </P>
+
+        <H3>Data Processor Guidance</H3>
+        <P>
+          WebWatch functions strictly as a Data Processor. We advise engineering teams never to
+          transmit unencrypted Personally Identifiable Information (PII) such as passwords, credit
+          card numbers, or social security identifiers in stack traces or error messages. Use
+          anonymized identifiers and scrub sensitive headers before reporting.
         </P>
       </>
     ),
@@ -844,9 +1074,12 @@ app.listen(3000);`}
 ];
 
 const NAV_GROUPS = [
-  { label: "Mulai", ids: ["prolog", "memulai"] },
-  { label: "Integrasi", ids: ["sdk-frontend", "backend-nodejs", "rest-api"] },
-  { label: "Platform", ids: ["alerting", "keamanan-kepatuhan"] },
+  { label: "Getting Started", ids: ["prolog", "getting-started"] },
+  {
+    label: "Integrations & Frameworks",
+    ids: ["backend-nodejs", "sdk-frontend", "docker-monorepo", "rest-api"],
+  },
+  { label: "Platform", ids: ["alerting", "security"] },
 ];
 
 const SECTION_BY_ID = new Map(DOCS_SECTIONS.map((section) => [section.id, section]));
@@ -861,8 +1094,6 @@ function DocsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
-  // The drawer only exists below the md breakpoint. On desktop the sidebar is
-  // sticky and always visible, so it must never be inert.
   useEffect(() => {
     const query = window.matchMedia("(min-width: 768px)");
     const sync = () => setIsDesktop(query.matches);
@@ -871,8 +1102,6 @@ function DocsPage() {
     return () => query.removeEventListener("change", sync);
   }, []);
 
-  // Scroll spy. Registered once, with a functional update so the listener is
-  // not torn down and rebuilt on every section change.
   useEffect(() => {
     const handleScroll = () => {
       const threshold = 160;
@@ -912,7 +1141,7 @@ function DocsPage() {
             variant="ghost"
             size="icon-sm"
             className="h-11 w-11 md:hidden"
-            aria-label={isSidebarOpen ? "Tutup daftar isi" : "Buka daftar isi"}
+            aria-label={isSidebarOpen ? "Close table of contents" : "Open table of contents"}
             aria-expanded={isSidebarOpen}
             onClick={() => setIsSidebarOpen((open) => !open)}
           >
@@ -931,7 +1160,7 @@ function DocsPage() {
           <Link to="/" className="flex items-center gap-2 font-display text-sm font-semibold">
             <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
             <span>
-              WebWatch <span className="ml-1 font-normal text-muted-foreground">Dokumentasi</span>
+              WebWatch <span className="ml-1 font-normal text-muted-foreground">Docs</span>
             </span>
           </Link>
 
@@ -940,12 +1169,13 @@ function DocsPage() {
               href="https://github.com/hsanmz/webwatch"
               target="_blank"
               rel="noreferrer noopener"
-              className="transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
             >
               GitHub
+              <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <Link to="/status" className="transition-colors hover:text-foreground">
-              Status API
+              API Status
             </Link>
           </nav>
         </div>
@@ -962,7 +1192,7 @@ function DocsPage() {
           <nav className="p-6 pb-24">
             {NAV_GROUPS.map((group) => (
               <div key={group.label} className="mb-8 last:mb-0">
-                <h2 className="mb-3 ml-2 text-xs font-medium text-muted-foreground">
+                <h2 className="mb-3 ml-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </h2>
                 <ul className="space-y-1">
@@ -1011,16 +1241,9 @@ function DocsPage() {
                 className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-info-surface text-info">
-                  <svg
-                    className="h-3 w-3"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                  </svg>
+                  <Terminal className="h-3 w-3" />
                 </span>
-                Support dan komunitas
+                Support & Issues
               </a>
             </div>
           </nav>
@@ -1029,7 +1252,7 @@ function DocsPage() {
         {isSidebarOpen ? (
           <button
             type="button"
-            aria-label="Tutup daftar isi"
+            aria-label="Close table of contents"
             className="fixed inset-0 z-20 cursor-default bg-background/80 backdrop-blur-sm md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
@@ -1039,11 +1262,11 @@ function DocsPage() {
           <div className="mx-auto max-w-content px-6 py-12 md:px-10">
             <div className="mb-16">
               <h1 className="mb-5 font-display text-4xl font-extrabold tracking-tight md:text-5xl">
-                Dokumentasi WebWatch APM
+                WebWatch APM Documentation
               </h1>
               <p className="max-w-reading text-lg font-medium leading-relaxed text-muted-foreground md:text-xl">
-                Panduan setup, referensi API, dan perilaku alerting untuk membangun sistem
-                pengawasan error aplikasi.
+                Complete guide to integrating SDKs, configuring framework middleware, posting to the
+                ingestion REST API, and receiving Telegram error alerts.
               </p>
             </div>
 
@@ -1070,7 +1293,7 @@ function DocsPage() {
                 size="sm"
                 onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               >
-                Kembali ke atas
+                Back to top
               </Button>
             </div>
           </div>

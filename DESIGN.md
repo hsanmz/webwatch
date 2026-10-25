@@ -44,7 +44,8 @@
 | Error-log ingestion for user applications | Core     | `POST /api/ingest`, Bearer per-site API key, batch of events, stored in D1                 |
 | Zero-config developer onboarding          | Core     | Two env vars (`WEBWATCH_KEY`, `WEBWATCH_URL`) + one import; no-install CDN SDK as fallback |
 | Immediate Telegram alerting on errors     | Core     | APM errors + OTP login codes, HTML parse mode                                              |
-| Domain ownership verification             | Core     | Blocks a user from claiming someone else's domain                                          |
+| Project & site management                 | Core     | Register applications, manage API keys (`ww_...`), toggle ingest                           |
+| Direct API key telemetry authorization    | Core     | Ingestion is authenticated directly via per-site API keys                                  |
 | Public status page                        | Minor    | `/status` backed by `/api/system-status`                                                   |
 
 Runtime target is a single Cloudflare Worker with a D1 database. No queue workers, no cron
@@ -283,7 +284,7 @@ Passwordless: **email → OTP code sent to the already-linked Telegram chat.**
 
 ---
 
-## 8. Site Lifecycle & Domain Verification
+## 8. Site Lifecycle & Application Setup
 
 ### 8.1 Creation
 
@@ -300,7 +301,13 @@ Two entry points share the same rules:
   uniqueness violations return `url_taken` (HTTP 409) / a bot inline message.
 - New rows: `name = hostname`, `verification_token = newId()`, `verification_status = 'pending'`.
 
-### 8.2 Verification
+### 8.2 Legacy Domain Verification (`webwatch-verify.txt`)
+
+> **Note on Verification:** Domain file verification (`webwatch-verify.txt`) was originally designed
+> for synthetic uptime probing (to prevent unsolicited HTTP pings to third-party domains). In an
+> APM model where applications actively push telemetry via authenticated API keys (`ww_...`),
+> requiring static file hosting at the domain root is obsolete and incompatible with backend APIs
+> and microservices.
 
 `POST /api/sites/verify { id }` (owner-scoped):
 
@@ -310,9 +317,6 @@ Two entry points share the same rules:
 3. If the body **contains** the verification token → `verification_status = 'verified'`.
 4. Errors: `not_found`, `no_token`, `file_not_found`, `token_mismatch`, `network_error`,
    `server_error`.
-
-The verification flow is the gate for ingestion (§9). No pause/probe semantics are attached to
-sites anymore; `is_active` purely toggles ingest acceptance.
 
 ### 8.3 API keys
 
@@ -339,7 +343,6 @@ Authorization: Bearer ww_…
 - `SELECT * FROM api_keys k JOIN sites s ON ... WHERE k.key = ?` — unknown key →
   `invalid_key` (401).
 - `sites.verification_status !== 'verified'` → `site_not_verified` (403).
-- `sites.is_active = 0` → ingestion rejected (APM toggle).
 
 ### 9.2 Payload
 
@@ -643,18 +646,18 @@ These are real divergences between the product surface and the implementation. T
 so nobody documents unimplemented behaviour as shipped. Fix or re-check any item before
 relying on it.
 
-| #   | Gap                                                                                                            | Impact                                                                              | Suggested fix                                                                       |
-| --- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| G0  | The CDN build (`/api/public/sdk`) and the published npm SDK are two separate implementations of one contract   | They drift independently (CDN build lacks batching/retry/throttle; per-event fetch) | Generate the CDN build from the npm source (shared core + browser adapter)          |
-| G1  | `POST /api/ingest` wraps **all** DB failures in a catch-all returning `bad_request` (400)                      | Server-side faults masquerade as client faults; SDKs cannot distinguish             | Narrow the `catch` and return `server_error` (500) for storage failures             |
-| G2  | No rate limiting on `/api/ingest`                                                                              | One valid key can insert unbounded rows (cost amplification)                        | Per-key token bucket (Durable Objects or Workers Rate Limiting binding)             |
-| G3  | `apm_events` is never purged; `telegram_links`/`otp_codes` rows accumulate until ad-hoc cleanup                | Unbounded storage growth                                                            | Scheduled purge worker + retention window per `created_at` (schema already indexed) |
-| G4  | `sites.url` SSRF guard: hostname **string** only, duplicated in `sites-api.server.ts` and `bot.server.ts`      | Hostnames resolving to private IPs pass; two implementations to keep in sync        | Resolve DNS before acceptance; extract one shared guard module                      |
-| G5  | `/api/system-status` components are static "operational" entries; an outage is inferred only from a D1 failure | Public status page can claim healthy ingestion while it is degraded                 | Derive per-component health from real signals (error rates, recent ingest ages)     |
-| G6  | API keys stored **plaintext** and re-served in full by `GET /api/sites/keys`                                   | A leaked DB dump leaks usable keys; rotation is manual (create new, delete site)    | Store hashes, show the key once at creation, add rotate/revoke endpoints            |
-| G7  | `src/server/plugins/env.ts` is dead code (the registered plugin is root `server/plugins/env.ts`)               | Confusion when editing environment wiring                                           | Delete the dead file                                                                |
-| G8  | APM Telegram alerts have **no cooldown** — every failing batch sends one message                               | A fast-failing app can flood the owner's chat                                       | Rate-limit alerts per site (e.g., 1 message/minute) or batch digest                 |
-| G9  | `sites.is_active` doubles as the APM ingest toggle (naming/semantics carried over from uptime)                 | Reads as "monitor on/off"; no distinction between pause-origin and pause-signalling | Rename or introduce an explicit `apm_enabled` column in a future migration          |
+| #   | Gap                                                                                                                                 | Impact                                                                              | Suggested fix                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| G0  | The CDN build (`/api/public/sdk`) and the published npm SDK are two separate implementations of one contract                        | They drift independently (CDN build lacks batching/retry/throttle; per-event fetch) | Generate the CDN build from the npm source (shared core + browser adapter)          |
+| G1  | `POST /api/ingest` wraps **all** DB failures in a catch-all returning `bad_request` (400)                                           | Server-side faults masquerade as client faults; SDKs cannot distinguish             | Narrow the `catch` and return `server_error` (500) for storage failures             |
+| G2  | No rate limiting on `/api/ingest`                                                                                                   | One valid key can insert unbounded rows (cost amplification)                        | Per-key token bucket (Durable Objects or Workers Rate Limiting binding)             |
+| G3  | `apm_events` is never purged; `telegram_links`/`otp_codes` rows accumulate until ad-hoc cleanup                                     | Unbounded storage growth                                                            | Scheduled purge worker + retention window per `created_at` (schema already indexed) |
+| G4  | `sites.url` SSRF guard: hostname **string** only, duplicated in `sites-api.server.ts` and `bot.server.ts`                           | Hostnames resolving to private IPs pass; two implementations to keep in sync        | Resolve DNS before acceptance; extract one shared guard module                      |
+| G5  | `/api/system-status` components are static "operational" entries; an outage is inferred only from a D1 failure                      | Public status page can claim healthy ingestion while it is degraded                 | Derive per-component health from real signals (error rates, recent ingest ages)     |
+| G6  | API keys stored **plaintext** and re-served in full by `GET /api/sites/keys`                                                        | A leaked DB dump leaks usable keys; rotation is manual (create new, delete site)    | Store hashes, show the key once at creation, add rotate/revoke endpoints            |
+| G7  | `src/server/plugins/env.ts` is dead code (the registered plugin is root `server/plugins/env.ts`)                                    | Confusion when editing environment wiring                                           | Delete the dead file                                                                |
+| G8  | APM Telegram alerts have **no cooldown** — every failing batch sends one message                                                    | A fast-failing app can flood the owner's chat                                       | Rate-limit alerts per site (e.g., 1 message/minute) or batch digest                 |
+| G9  | `sites.is_active` doubles as the APM ingest toggle (naming carried over from uptime), but is not yet enforced in `POST /api/ingest` | Pausing a site does not reject ingest requests until checked in `/api/ingest`       | Add `is_active` check to `POST /api/ingest` and rename column to `apm_enabled`      |
 
 Status-page wording, docs, and UI copy must not promise anything a listed gap blocks (e.g. no
 "rate limited", no "unlimited retention").

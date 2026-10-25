@@ -109,6 +109,25 @@ export const Route = createFileRoute("/api/ingest")({
             await db().batch(batch.slice(i, i + CHUNK_SIZE));
           }
 
+          // Permanently cap logs to 100 per domain to conserve DB storage
+          try {
+            await db()
+              .prepare(
+                `DELETE FROM apm_events
+                 WHERE site_id = ?
+                   AND id NOT IN (
+                     SELECT id FROM apm_events
+                     WHERE site_id = ?
+                     ORDER BY created_at DESC
+                     LIMIT 100
+                   )`,
+              )
+              .bind(site.site_id, site.site_id)
+              .run();
+          } catch (purgeError) {
+            console.error("[Ingest Prune Error]:", purgeError);
+          }
+
           // Notify Telegram for the first error in the batch to avoid spam
           if (site.chat_id) {
             const firstError = body.events.find((e) =>

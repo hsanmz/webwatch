@@ -21,7 +21,38 @@ export const Route = createFileRoute("/api/sites/dashboard")({
             .bind(user.id)
             .all();
 
-          return Response.json({ events: events ?? [] });
+          const siteCounts = await db()
+            .prepare(
+              `SELECT 
+                 COUNT(*) as total,
+                 COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) as active
+               FROM sites
+               WHERE user_id = ?`,
+            )
+            .bind(user.id)
+            .first<{ total: number; active: number }>();
+
+          const eventCounts = await db()
+            .prepare(
+              `SELECT 
+                 COUNT(*) as total_stored,
+                 COALESCE(SUM(CASE WHEN e.created_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) as last_24h
+               FROM apm_events e
+               JOIN sites s ON e.site_id = s.id
+               WHERE s.user_id = ?`,
+            )
+            .bind(user.id)
+            .first<{ total_stored: number; last_24h: number }>();
+
+          return Response.json({
+            events: events ?? [],
+            metrics: {
+              totalSites: siteCounts?.total ?? 0,
+              activeSites: siteCounts?.active ?? 0,
+              events24h: eventCounts?.last_24h ?? 0,
+              totalStoredEvents: eventCounts?.total_stored ?? 0,
+            },
+          });
         } catch (error) {
           console.error("[Dashboard API] DB error:", error);
           return Response.json({ error: "server_error" }, { status: 500 });

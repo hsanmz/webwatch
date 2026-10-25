@@ -6,6 +6,8 @@ export type ApiSite = {
   verification_token: string | null;
   verification_status: string;
   created_at: string;
+  log_count?: number;
+  last_event_at?: string | null;
 };
 
 export type ApiUser = {

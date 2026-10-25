@@ -9,7 +9,7 @@ Guidance for contributors and coding agents working in this repository.
 WebWatch is an **Application Performance Monitoring (APM) — error monitoring** platform running
 entirely on Cloudflare Workers + D1.
 
-Three systems make up the product:
+Key systems that make up the product:
 
 1. **APM ingestion (`POST /api/ingest`)** — user applications send error batches using a per-site
    API key (`Authorization: Bearer ww_…`). Two SDK channels are supported: the npm package
@@ -17,14 +17,15 @@ Three systems make up the product:
    from `/api/public/sdk`.
 2. **Domain verification (`POST /api/sites/verify`)** — a user must host a `webwatch-verify.txt`
    file containing their verification token before APM telemetry is accepted for that site.
-3. **Notifications** — login OTP codes and APM error alerts are delivered over Telegram.
+3. **Notifications** — login OTP codes and real-time APM error alerts are delivered directly to the
+   user's linked Telegram chat.
 
 **Read [DESIGN.md](./DESIGN.md) before changing anything structural.** It documents the runtime
 topology, the complete D1 schema, every request flow, the security model, and the known gaps.
 
-> Note: WebWatch previously shipped synthetic uptime monitoring (probes, incidents, an SSL
-> expiry alarm, a cron scheduler worker). That surface has been **removed** — the product is
-> now ingestion + error reporting only. Do not reintroduce monitor/incident concepts in code
+> Note: WebWatch previously shipped synthetic uptime monitoring (periodic ping probes, incidents, an SSL
+> expiry alarm, a cron scheduler worker). That entire product area has been **removed** — the product is
+> now focused strictly on APM and error reporting. Do not reintroduce monitor/incident concepts in code
 > or copy.
 
 ---
@@ -47,7 +48,7 @@ topology, the complete D1 schema, every request flow, the security model, and th
 ## 3. Commands
 
 ```sh
-bun i                              # install
+bun i                              # install dependencies
 bun run dev                        # Vite dev server (NO D1 bindings available)
 bun run build                      # Nitro build → .output/
 bun run build:sdk                  # tsc build of packages/webwatch-sdk → dist/
@@ -124,8 +125,7 @@ reference is [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
   `--color-primary-subtle`, `--color-focus`, `--color-success`, `--color-success-surface`,
   `--color-warning`, `--color-warning-surface`, `--color-danger`, `--color-danger-surface`,
   `--color-info`, `--color-info-surface`.
-- **Monitoring status**: `--up`, `--down`, `--degraded`, `--paused`. `--paused` is neutral on
-  purpose: a paused site is not a fault.
+- **Status indicators**: `--up`, `--down`, `--degraded`, `--paused`.
 - **Charts**: `--chart-1` through `--chart-5`. **Code**: `--code-plain`, `--code-punctuation`,
   `--code-keyword`, `--code-attribute`, `--code-string`.
 - **Shape and type**: `--radius-xs/sm/md/lg/xl`, `--shadow-sm/md/lg`, `--font-sans`,
@@ -138,19 +138,19 @@ write down the reason in `DESIGN_SYSTEM.md`.
 
 ## 5. Conventions
 
-| Area              | Rule                                                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language          | Code, comments, identifiers, and commit messages in **English**. User-facing copy (UI strings, Telegram messages) is **Indonesian** — keep it that way. |
-| Formatting        | Prettier: 100 print width, double quotes, semicolons, trailing commas.                                                                                  |
-| Timestamps        | Store ISO-8601 UTC strings (`strftime('%Y-%m-%dT%H:%M:%fZ','now')`).                                                                                    |
-| IDs               | `crypto.randomUUID()` via `newId()` from `@/lib/auth.server`.                                                                                           |
-| API keys          | `ww_` + 24 random bytes hex, generated in `src/routes/api/sites/keys.ts`.                                                                               |
-| API errors        | `{ "error": "<machine_code>" }` — snake_case codes, English.                                                                                            |
-| Telegram messages | HTML parse mode. **Always escape interpolated values** with `escapeHtml()`.                                                                             |
-| Routes            | File-based. See `src/routes/README.md`. Never create `src/pages/`, `app/layout.tsx`, or `_app/` — those are Next.js/Remix conventions.                  |
-| Generated files   | `src/routeTree.gen.ts` is generated. Never hand-edit it.                                                                                                |
-| UI primitives     | `src/components/ui/*` are shadcn/ui generated. Change them only deliberately.                                                                           |
-| Design system     | `DESIGN_SYSTEM.md` documents the tokens, components, states, and the documented deviations. Update it whenever a token is added or a rule changes.      |
+| Area              | Rule                                                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language          | Code, comments, documentation (`/docs`, `README.md`, `DESIGN.md`), and commit messages in **English**. User-facing app UI copy and Telegram alert templates stay in **Indonesian**. |
+| Formatting        | Prettier: 100 print width, double quotes, semicolons, trailing commas.                                                                                                              |
+| Timestamps        | Store ISO-8601 UTC strings (`strftime('%Y-%m-%dT%H:%M:%fZ','now')`).                                                                                                                |
+| IDs               | `crypto.randomUUID()` via `newId()` from `@/lib/auth.server`.                                                                                                                       |
+| API keys          | `ww_` + 24 random bytes hex, generated in `src/routes/api/sites/keys.ts`.                                                                                                           |
+| API errors        | `{ "error": "<machine_code>" }` — snake_case codes, English.                                                                                                                        |
+| Telegram messages | HTML parse mode. **Always escape interpolated values** with `escapeHtml()`.                                                                                                         |
+| Routes            | File-based. See `src/routes/README.md`. Never create `src/pages/`, `app/layout.tsx`, or `_app/` — those are Next.js/Remix conventions.                                              |
+| Generated files   | `src/routeTree.gen.ts` is generated. Never hand-edit it.                                                                                                                            |
+| UI primitives     | `src/components/ui/*` are shadcn/ui generated. Change them only deliberately.                                                                                                       |
+| Design system     | `DESIGN_SYSTEM.md` documents the tokens, components, states, and the documented deviations. Update it whenever a token is added or a rule changes.                                  |
 
 ### Adding an API route
 
@@ -168,13 +168,12 @@ write down the reason in `DESIGN_SYSTEM.md`.
 There is no monitoring state machine and no scheduler. Ingestion is a stateless pipe:
 
 - `POST /api/ingest` authenticates with `Authorization: Bearer ww_…`, looks the key up in
-  `api_keys`, joins `sites`, and requires `verification_status = 'verified'` **and**
-  `is_active = 1` (`is_active` doubles as the APM ingest toggle).
+  `api_keys`, joins `sites`, and requires `verification_status = 'verified'`.
 - Body: `{ events: [{ type, message, environment?, stack_trace?, url?, method?, user_agent? }] }`.
   Events are batch-inserted into `apm_events` with a single reused prepared statement.
-- Error codes: `missing_token`, `invalid_key`, `site_not_verified`, `invalid_payload`,
-  `server_error`. CORS is `*` because the browser SDK posts from customer origins.
-- Momentary APM error alerts (`formatApmErrorMessage`) are sent to the linked Telegram chat of
+- Error codes: `missing_token`, `invalid_key`, `site_not_verified`, `invalid_payload`, `server_error`.
+  CORS is `*` because the browser SDK posts from customer origins.
+- Instant APM error alerts (`formatApmErrorMessage`) are sent to the linked Telegram chat of
   the site owner.
 - The npm SDK (`packages/webwatch-sdk/`) batches events in memory (max 1000 queued, max 50 per
   request, 5 s flush interval, 5 s duplicate throttle, 3 exponential retries for 5xx/408/429 and
@@ -191,7 +190,7 @@ it has been deleted on purpose.
 - New pure logic goes into `*.server.ts` **or** a sibling pure module and gets a unit test.
 - Vitest runs **both** glob sets: `src/**/*.test.ts` (app) and
   `packages/**/src/**/*.test.ts` (SDK). A test elsewhere (mis. `scripts/`) is silently ignored.
-- Test names are written in Indonesian to match the existing suite.
+- Test names in Indonesian or English matching existing suite patterns.
 - Vitest does not type-check. The root `tsconfig.json` covers `src/` only; `packages/` is
   type-checked with its own tsconfig (see §3). Type-check whichever you touch.
 - Run `bun run test` and `bun run lint` before proposing a change.
@@ -215,7 +214,7 @@ documented in git history.
 
 Secrets are set with `bunx wrangler secret put` and are **never** committed:
 
-- `TELEGRAM_BOT_TOKEN` — bot API access (also resolved `botUsername` at runtime).
+- `TELEGRAM_BOT_TOKEN` — bot API access (also resolves `botUsername` at runtime).
 - `TELEGRAM_WEBHOOK_SECRET` — compared against the `x-telegram-bot-api-secret-token` header of
   `POST /api/public/telegram/webhook`.
 
@@ -240,6 +239,7 @@ The most common traps:
   UI beyond per-site key list display.
 - The SSRF guard exists in two places (`sites-api.server.ts`, `bot.server.ts`) and only inspects
   the hostname string (no DNS resolution).
+- `sites.is_active` is toggled by `/pause`, `/resume`, and the UI switch, but is not yet enforced in `POST /api/ingest` (DESIGN.md gap G9).
 - `src/server/plugins/env.ts` is dead code; `vite.config.ts` registers `server/plugins/env.ts`.
 
 ---

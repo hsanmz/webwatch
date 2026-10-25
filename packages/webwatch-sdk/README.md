@@ -1,47 +1,51 @@
 # @webwatch/sdk
 
-Zero-config error capture SDK for [WebWatch](https://github.com/hsanmz/webwatch) — uncaught
-errors and unhandled rejections are auto-captured, batched in memory, and posted to your
-WebWatch ingest endpoint with retries. No agent, no per-route wrappers.
+Zero-config error capture SDK for [WebWatch](https://github.com/hsanmz/webwatch) — automatically captures unhandled exceptions, unhandled promise rejections, and runtime errors, batches them in memory, and posts them to your WebWatch ingest endpoint with automatic retries. Zero server agents, zero per-route boilerplate.
 
-## Instalasi
+---
+
+## Installation
 
 ```sh
 npm install @webwatch/sdk
-# atau
+# or
 bun add @webwatch/sdk
+# or
+pnpm add @webwatch/sdk
 ```
 
-## Quick start (zero-config)
+---
 
-Set two env vars, then import once anywhere on the boot path — that is the whole setup:
+## Quick Start (Zero-Config)
+
+Set two environment variables, then import `@webwatch/sdk` once at the entrypoint of your application:
 
 ```sh
-export WEBWATCH_KEY="ww_..."                       # per-site API key dari dashboard WebWatch
-export WEBWATCH_URL="https://watch.example.id"     # deployment WebWatch kamu
+export WEBWATCH_KEY="ww_..."                       # Site API key from your WebWatch dashboard
+export WEBWATCH_URL="https://watch.example.com"     # Your WebWatch deployment origin
 ```
 
 ```js
-// entrypoint (Node/Bun, Next.js, Express, Hono, Fastify, ...)
+// At your application entrypoint (Node/Bun, Next.js, Express, Hono, Fastify, etc.)
 import "@webwatch/sdk";
 ```
 
-Tanpa kedua env itu SDK diam (no-op) dan memberi peringatan sekali lewat `console.warn`
-saat ada event masuk — monitoring tidak pernah menghentikan aplikasimu.
+Without these environment variables, the SDK remains completely dormant (no-op) and outputs a single console warning when an event is recorded — error monitoring will never break or block your application.
 
-## Yang otomatis ditangkap
+---
 
-| Sumber                                  | event_type       | Catatan                                                    |
-| --------------------------------------- | ---------------- | ---------------------------------------------------------- |
-| `process` unhandledRejection            | `backend_error`  | Termasuk route `async` Express 4 yang gagal                |
-| `process` uncaughtException             | `backend_error`  | Via `uncaughtExceptionMonitor` — proses tetap crash normal |
-| `window` error _(browser)_              | `frontend_error` | Stack + URL halaman                                        |
-| `window` unhandledrejection _(browser)_ | `backend_error`  |                                                            |
+## What Gets Captured Automatically
 
-> Untuk framework yang menelan error per-route (Express 4 `async`, Hono, Fastify), pakai
-> middleware di bawah agar semuanya tercatat — plus ini jamin terkirim sebelum proses mati.
+| Source                                  | `event_type`     | Details                                                  |
+| --------------------------------------- | ---------------- | -------------------------------------------------------- |
+| `process` unhandledRejection            | `backend_error`  | Includes rejected async routes in backend frameworks     |
+| `process` uncaughtException             | `backend_error`  | Uses `uncaughtExceptionMonitor` — process exits normally |
+| `window` error _(browser)_              | `frontend_error` | Captures stack trace + page URL                          |
+| `window` unhandledrejection _(browser)_ | `backend_error`  | Catches unhandled browser promise rejections             |
 
-## Framework helpers
+---
+
+## Framework Integrations
 
 ### Express
 
@@ -50,11 +54,17 @@ import express from "express";
 import { expressErrorMiddleware, wrapAsync } from "@webwatch/sdk/express";
 
 const app = express();
+
 app.get(
-  "/users",
-  wrapAsync(async (req, res) => res.json({ ok: true })),
+  "/api/users",
+  wrapAsync(async (req, res) => {
+    const users = await fetchUsers();
+    res.json(users);
+  }),
 );
-app.use(expressErrorMiddleware()); // setelah semua route
+
+// Register after all routes and handlers
+app.use(expressErrorMiddleware());
 ```
 
 ### Hono
@@ -70,42 +80,64 @@ app.onError(honoOnError());
 ### Fastify
 
 ```js
+import Fastify from "fastify";
 import { fastifyErrorHandler } from "@webwatch/sdk/fastify";
 
-fastify.setErrorHandler(fastifyErrorHandler());
+const app = Fastify();
+app.setErrorHandler(fastifyErrorHandler());
 ```
 
-### Next.js
+### Next.js (App Router / Pages Router)
 
 ```ts
-// instrumentation.ts (di root proyek atau src/)
+// instrumentation.ts (in your project root or src/ directory)
 export async function register() {
   await import("@webwatch/sdk/next").then((m) => m.register());
 }
 ```
 
-## API
+---
 
-| Ekspor                                               | Fungsi                                                  |
+## Programmatic API
+
+| Export                                               | Description                                             |
 | ---------------------------------------------------- | ------------------------------------------------------- |
-| `capture(type, message, stackTrace?, url?, method?)` | Masukkan event manual (fire-and-forget)                 |
-| `captureError(error, options?)`                      | Tangkap `Error`/nilai apa pun lintas root `Error.cause` |
-| `flush()`                                            | Paksa kirim seluruh buffer sekarang                     |
-| `init(key, { endpoint })`                            | Konfigurasi eksplisit (path bundler browser)            |
-| `@webwatch/sdk/next` → `register()`                  | Drop-in untuk `instrumentation.ts`                      |
+| `capture(type, message, stackTrace?, url?, method?)` | Enqueue a custom event manually (fire-and-forget)       |
+| `captureError(error, options?)`                      | Capture an `Error` or any value across recursive causes |
+| `flush()`                                            | Manually force an immediate flush of buffered events    |
+| `init(key, { endpoint })`                            | Explicit programmatic initialization (e.g. browser)     |
+| `@webwatch/sdk/next` → `register()`                  | Drop-in helper for Next.js `instrumentation.ts`         |
 
-## Batching & retry
+### Manual Capture Example
 
-- Queue di memori (maks **1000** event, yang paling tua dibuang saat penuh).
-- Flush per **50** event / interval **5 detik**, kirim paralel maksimum 1 batch in-flight.
-- Retry eksponensial (3x) untuk 5xx/408/429 dan error jaringan; **tidak** di-retry untuk
-  400/401/403/404 (mis. kode `invalid_key`, `site_not_verified`) supaya tidak membabi-buta.
-- Event duplikat (type + pesan sama) di-throttle 5 detik anti-storm.
+```js
+import { captureError } from "@webwatch/sdk";
 
-## Catatan
+try {
+  await processPayment();
+} catch (err) {
+  captureError(err, {
+    url: "/api/pay",
+    method: "POST",
+  });
+}
+```
 
-- Browser tanpa bundler: pakai script `GET /api/public/sdk` dari deployment WebWatch —
-  satu file ES module, tidak butuh npm.
-- Event saat proses crash karena uncaught exception mungkin hilang (flush async tidak
-  bisa menunggu exit); middleware framework menutup kasus itu.
-- `environment` diambil dari `NODE_ENV` (fallback `production`).
+---
+
+## Batching, Retries & Throttling
+
+- **In-Memory Queue**: Buffered up to **1,000** events. When the queue overflows, the oldest events are safely discarded.
+- **Flush Cadence**: Flushes every **50** events or every **5 seconds**, with at most 1 in-flight batch request at a time.
+- **Exponential Retry**: Up to 3 retry attempts with exponential backoff for `5xx`, `408`, `429`, and network connection drops. Client errors (`400`, `401`, `403`, `404`) fail fast and are not retried.
+- **Duplicate Throttling**: Identical events (matching `type` and `message`) are throttled within a 5-second window to prevent alert storms.
+
+---
+
+## Notes & Best Practices
+
+- **Browser without bundlers**: Use the zero-install CDN script from `GET /api/public/sdk` hosted by your WebWatch deployment.
+- **Docker & Kubernetes**: Inject `WEBWATCH_KEY` and `WEBWATCH_URL` into your container environment. No background daemon or sidecar container needed.
+- **Monorepos (Turborepo, Nx, pnpm)**: Install `@webwatch/sdk` per workspace service (`apps/web`, `apps/api`) and assign dedicated per-service API keys to keep alerts cleanly partitioned.
+- **Process crashes**: When a process exits due to an uncaught exception, asynchronous flushes cannot block process termination; using framework middleware ensures exceptions are flushed before handling terminates.
+- **Environment detection**: The `environment` tag is automatically determined from `process.env.NODE_ENV` (defaults to `production`).

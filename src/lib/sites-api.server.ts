@@ -23,6 +23,8 @@ type SiteRow = {
   verification_token: string | null;
   verification_status: string;
   created_at: string;
+  log_count: number;
+  last_event_at: string | null;
 };
 
 type SiteDbRow = {
@@ -33,6 +35,8 @@ type SiteDbRow = {
   verification_token: string | null;
   verification_status: string;
   created_at: string;
+  log_count?: number;
+  last_event_at?: string | null;
 };
 
 function mapSite(row: SiteDbRow): SiteRow {
@@ -44,6 +48,8 @@ function mapSite(row: SiteDbRow): SiteRow {
     verification_token: row.verification_token,
     verification_status: row.verification_status,
     created_at: row.created_at,
+    log_count: typeof row.log_count === "number" ? row.log_count : 0,
+    last_event_at: row.last_event_at ?? null,
   };
 }
 
@@ -83,8 +89,15 @@ export async function listSites(request: Request): Promise<Response> {
   try {
     const { results } = await db()
       .prepare(
-        `SELECT id, name, url, is_active, verification_token, verification_status, created_at
-         FROM sites WHERE user_id = ? ORDER BY created_at ASC`,
+        `SELECT 
+           s.id, s.name, s.url, s.is_active, s.verification_token, s.verification_status, s.created_at,
+           COUNT(e.id) as log_count,
+           MAX(e.created_at) as last_event_at
+         FROM sites s
+         LEFT JOIN apm_events e ON e.site_id = s.id
+         WHERE s.user_id = ?
+         GROUP BY s.id
+         ORDER BY s.created_at DESC`,
       )
       .bind(user.id)
       .all<SiteDbRow>();
@@ -97,6 +110,7 @@ export async function listSites(request: Request): Promise<Response> {
 
 type CreateSiteBody = {
   url?: unknown;
+  name?: unknown;
 };
 
 export async function createSite(request: Request): Promise<Response> {
@@ -122,14 +136,29 @@ export async function createSite(request: Request): Promise<Response> {
 
   const id = newId();
   const token = newId();
+  const siteName =
+    typeof body.name === "string" && body.name.trim() ? body.name.trim() : new URL(url).hostname;
+
   try {
     await db()
       .prepare(
         `INSERT INTO sites (id, user_id, url, name, verification_token, verification_status)
          VALUES (?, ?, ?, ?, ?, 'pending')`,
       )
-      .bind(id, user.id, url, new URL(url).hostname, token)
+      .bind(id, user.id, url, siteName, token)
       .run();
+
+    // Auto-create initial default API key for instant telemetry setup
+    try {
+      const crypto = await import("node:crypto");
+      const rawKey = crypto.randomBytes(24).toString("hex");
+      await db()
+        .prepare("INSERT INTO api_keys (key, site_id, name) VALUES (?, ?, ?)")
+        .bind(`ww_${rawKey}`, id, "Default Key")
+        .run();
+    } catch (keyErr) {
+      console.error("[createSite] Initial key creation warning:", keyErr);
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message.toLowerCase() : "";
     if (msg.includes("unique") || msg.includes("constraint")) {
@@ -243,8 +272,15 @@ export async function siteDetail(request: Request): Promise<Response> {
   try {
     const site = await db()
       .prepare(
-        `SELECT id, name, url, is_active, verification_token, verification_status, created_at
-         FROM sites WHERE id = ? AND user_id = ? LIMIT 1`,
+        `SELECT 
+           s.id, s.name, s.url, s.is_active, s.verification_token, s.verification_status, s.created_at,
+           COUNT(e.id) as log_count,
+           MAX(e.created_at) as last_event_at
+         FROM sites s
+         LEFT JOIN apm_events e ON e.site_id = s.id
+         WHERE s.id = ? AND s.user_id = ?
+         GROUP BY s.id
+         LIMIT 1`,
       )
       .bind(id, user.id)
       .first<SiteDbRow>();

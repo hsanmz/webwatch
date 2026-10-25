@@ -4,14 +4,14 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "dev": "bun --bun vite dev",
+    "build": "bun --bun vite build",
     "build:sdk": "tsc -p packages/webwatch-sdk/tsconfig.json",
-    "build:dev": "vite build --mode development",
-    "preview": "vite preview",
+    "build:dev": "bun --bun vite build --mode development",
+    "preview": "bun --bun vite preview",
     "assets": "bun run scripts/generate-brand-assets.ts",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "format": "prettier --write ."
   },
   "overrides": {

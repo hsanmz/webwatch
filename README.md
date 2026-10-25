@@ -1,372 +1,371 @@
 # WebWatch
 
-**APM error monitoring untuk aplikasi web — berjalan penuh di Cloudflare Workers + D1.**
-Satu Worker menangkap error dari aplikasi user lewat SDK ringan, menyimpannya ke D1, mengirim
-alert ke Telegram, dan menampilkan semuanya di dashboard — tanpa agent, tanpa server, tanpa VM.
+**Modern, edge-first Application Performance Monitoring (APM) and error tracking — running entirely on Cloudflare Workers + D1.**
 
-> Catatan: WebWatch sebelumnya punya fitur uptime monitoring (probe berkala, incident, alarm SSL).
-> Seluruh fitur itu **telah dihapus** — produk kini fokus pada pengumpulan log error (APM saja).
-> Fitur uptime tidak diiklankan maupun didukung oleh implementasi saat ini.
+WebWatch captures runtime exceptions and crashes across your backend services and frontend applications via a lightweight SDK, persists them to Cloudflare D1, delivers instant notifications to Telegram, and visualizes issues in a clean developer dashboard. Zero server agents, zero VMs, zero background queues.
+
+> **Note:** WebWatch previously included synthetic uptime monitoring (periodic ping probes, incidents, SSL expiry tracking). That feature set has been completely **removed**. WebWatch is now exclusively focused on APM and runtime error tracking.
 
 ---
 
-## Fitur
+## Features
 
-- **Pengumpulan log error (APM)** — SDK kirim batch event error (`frontend_error`,
-  `backend_error`, `api_error`, …) ke endpoint ingest yang diautentikasi API key per situs
-  (`ww_…`). Tanpa agent, tanpa VM.
-- **Dua kanal SDK**:
-  - Paket npm **`@webwatch/sdk`** — zero-config: set dua env (`WEBWATCH_KEY` + `WEBWATCH_URL`),
-    import sekali, auto-capture `unhandledRejection` / `uncaughtException`, batching + retry,
-    plus helper Express / Hono / Fastify / Next.js.
-  - CDN build **`/api/public/sdk`** — satu berkas ES module dari deployment kamu sendiri,
-    tanpa npm install, untuk browser.
-- **Verifikasi domain** — sebelum telemetri diterima, situs harus meng-host
-  `webwatch-verify.txt` berisi token verifikasi. Ini mencegah orang lain memarkir telemetri
-  dengan nama domain yang bukan miliknya.
-- **Alert Telegram** — log error APM memicu pesan alert ke chat Telegram yang terhubung; kode
-  masuk (OTP) login juga dikirim via chat yang sama.
-- **Dashboard & halaman detail situs** — daftar event terbaru, environment, stack trace, URL,
-  method, user agent.
-- **Halaman status publik** — `/status` menampilkan komponen layanan.
-
-### Yang tidak ada (dengan sengaja)
-
-`checks`, `incidents`, penjadwalan probe, dan alarm SSL tidak lagi bagian dari proyek. Dua tabel
-uptime dihapus dan kolom-kolom `sites` yang bersifat monitor dihapus dari schema (migrasi 0007).
-Jika kamu mencari kode itu, cari di riwayat git.
+- **APM Error Ingestion** — Send batched error events (`backend_error`, `frontend_error`, `api_error`, etc.) directly to `POST /api/ingest`, authenticated with a per-site API key (`Authorization: Bearer ww_...`).
+- **Dual SDK Distribution Channels**:
+  - **`@webwatch/sdk` (npm package)**: Zero-config setup via environment variables (`WEBWATCH_KEY` & `WEBWATCH_URL`), auto-captures `uncaughtException` and `unhandledRejection`, in-memory batching with exponential backoff retries, plus drop-in middleware for Express, Hono, Fastify, and Next.js.
+  - **CDN Browser Build (`/api/public/sdk`)**: A self-hosted zero-install single ES module served directly from your deployment for frontend applications.
+- **Domain Verification Gate** — Validates domain ownership via `webwatch-verify.txt` before APM telemetry is accepted, preventing cross-tenant domain squatting.
+- **Instant Telegram Alerts** — Critical crashes and exceptions trigger immediate HTML-formatted alerts to your linked Telegram chat, including stack trace snippets, URL, method, and environment. Login OTP codes are also delivered via the same chat.
+- **Web Dashboard & Site Management** — Browse exception streams, filter by environment, inspect formatted stack traces, manage per-site API keys, and toggle telemetry collection.
+- **Public System Status** — Built-in public status endpoint and dashboard at `/status`.
 
 ---
 
-## Arsitektur
+## Architecture
 
 ```
 ┌────────────────────────────┐        ┌────────────────────────────┐
-│  Aplikasi user (browser)   │        │  Aplikasi user (server)    │
-│  SDK via /api/public/sdk   │        │  @webwatch/sdk (npm)       │
+│   Client Application (Web) │        │  Backend Service (Server)  │
+│   SDK via /api/public/sdk  │        │   @webwatch/sdk (npm)      │
 └─────────────┬──────────────┘        └─────────────┬──────────────┘
-              │        POST /api/ingest (Bearer ww_)│
+              │       POST /api/ingest (Bearer ww_) │
               ▼                                     ▼
       ┌───────────────────────────────────────────────────┐
-      │        Cloudflare Worker "webwatch"               │
-      │   TanStack Start + Nitro, cloudflare-module       │
+      │           Cloudflare Worker "webwatch"            │
+      │     TanStack Start + Nitro (cloudflare-module)    │
       │  ┌──────────────┐  ┌────────────┐  ┌───────────┐  │
-      │  │ Dashboard/API│  │ Ingest     │  │ Telegram  │  │
-      │  │ (SSR/React)  │  │ webhook    │  │ bot       │  │
+      │  │ Dashboard/UI │  │ Ingestion  │  │ Telegram  │  │
+      │  │ (SSR/React)  │  │ Endpoint   │  │ Bot & OTP │  │
       │  └──────────────┘  └────────────┘  └───────────┘  │
       └───────────────────────────┬───────────────────────┘
                                   ▼
                             ┌──────────┐
-                            │ Cloudflare│
-                            │    D1     │
+                            │Cloudflare│
+                            │    D1    │
                             └──────────┘
 ```
 
-Satu Worker. Tanpa cron scheduler.
+A single stateless Cloudflare Worker handles web rendering, error ingestion, API endpoints, and the Telegram bot webhook.
 
 ---
 
-## Menjalankan & deploy
+## Getting Started
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) package manager
+- [Cloudflare Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+
+### Local Development
 
 ```sh
-bun i                                            # install
-bun run build && bunx wrangler dev               # lokal dengan D1 binding
+# 1. Install dependencies
+bun i
+
+# 2. Apply local D1 database migrations
 bunx wrangler d1 migrations apply webwatch --local
+
+# 3. Build application and start local Wrangler dev server (with D1 bindings)
+bun run build && bunx wrangler dev
 ```
 
-Deploy:
+> **Important:** `bun run dev` (Vite dev server) cannot inject Cloudflare D1 bindings directly. Any code path that interacts with the database should be run via `bun run build && bunx wrangler dev`.
+
+### Deployment
 
 ```sh
+# 1. Apply D1 migrations to remote database
 bunx wrangler d1 migrations apply webwatch --remote
+
+# 2. Build and deploy Worker
 bun run build
 bunx wrangler deploy
 ```
 
-Set sekret (jangan pernah di-commit):
+Configure required Cloudflare secrets (never commit these):
 
 ```sh
 bunx wrangler secret put TELEGRAM_BOT_TOKEN
 bunx wrangler secret put TELEGRAM_WEBHOOK_SECRET
 ```
 
-Daftarkan webhook Telegram ke `https://<deployment>/api/public/telegram/webhook` dengan
-`secret_token` yang sama dengan `TELEGRAM_WEBHOOK_SECRET`.
+Register your Telegram webhook:
 
-### Pengembangan lokal
-
-`bun run dev` tidak bisa menginjeksi binding D1 — semua jalur kode yang menyentuh D1 hanya
-bisa diuji setelah `bun run build && bunx wrangler dev`. Detail workflow ada di
-[AGENTS.md](AGENTS.md).
-
----
-
-## Variabel & sekret
-
-| Nama                      | Jenis          | Fungsi                                                |
-| ------------------------- | -------------- | ----------------------------------------------------- |
-| `DB`                      | binding D1     | Database utama (`d1_databases` di `wrangler.jsonc`)   |
-| `ASSETS`                  | binding assets | Bersifat internal (Nitro static output)               |
-| `TELEGRAM_BOT_TOKEN`      | secret         | Kirim pesan + resolve nama bot di UI                  |
-| `TELEGRAM_WEBHOOK_SECRET` | secret         | Header `x-telegram-bot-api-secret-token` pada webhook |
-| `TELEGRAM_BOT_USERNAME`   | var (opsional) | Fallback nama bot untuk link penghubung di UI         |
+```sh
+curl -F "url=https://<your-deployment-domain>/api/public/telegram/webhook" \
+     -F "secret_token=<YOUR_TELEGRAM_WEBHOOK_SECRET>" \
+     https://api.telegram.org/bot<YOUR_TELEGRAM_BOT_TOKEN>/setWebhook
+```
 
 ---
 
-## Route map
+## Environment Variables & Bindings
 
-### Halaman
-
-| Route        | Pengguna    | Isi                                             |
-| ------------ | ----------- | ----------------------------------------------- |
-| `/`          | Publik      | Landing + fitur                                 |
-| `/docs`      | Publik      | Panduan instalasi SDK & ingest                  |
-| `/status`    | Publik      | Status komponen layanan                         |
-| `/auth`      | Publik      | Login OTP via email → Telegram                  |
-| `/dashboard` | Autentikasi | Ringkasan event APM terbaru                     |
-| `/sites/$id` | Autentikasi | Detail situs: verifikasi, API key, daftar event |
-| `/apm`       | Autentikasi | Log Error (APM) lintas situs                    |
-| `/settings`  | Autentikasi | Pengaturan akun                                 |
-
-### API
-
-| Endpoint                            | Auth           | Fungsi                                        |
-| ----------------------------------- | -------------- | --------------------------------------------- |
-| `POST /api/ingest`                  | Bearer `ww_`   | Ingest batch event APM                        |
-| `GET /api/public/sdk`               | —              | CDN build SDK browser (ES module)             |
-| `POST /api/public/telegram/webhook` | secret header  | Update dari Telegram Bot API                  |
-| `GET /api/system-status`            | —              | JSON status komponen untuk halaman `/status`  |
-| `GET /api/auth/me`                  | session cookie | User aktif                                    |
-| `POST /api/auth/otp`                | —              | Kirim kode masuk ke chat terhubung            |
-| `POST /api/auth/verify`             | —              | Verifikasi OTP → set session cookie           |
-| `GET /api/auth/link-status`         | —              | Status penghubungan Telegram                  |
-| `POST /api/auth/logout`             | session cookie | Buang session                                 |
-| `GET /api/sites`                    | session        | Daftar situs milik user                       |
-| `POST /api/sites`                   | session        | Tambah situs (`url`)                          |
-| `PATCH /api/sites`                  | session        | Update `name` / `is_active`                   |
-| `DELETE /api/sites`                 | session        | Hapus situs                                   |
-| `GET /api/sites/detail?id=`         | session        | Detail situs + 100 event terbaru              |
-| `GET /api/sites/dashboard`          | session        | 15 event terbaru lintas situs untuk dashboard |
-| `GET /api/sites/events?siteId=`     | session        | 100 event terbaru satu situs                  |
-| `GET /api/sites/keys?siteId=`       | session        | Daftar API key situs                          |
-| `POST /api/sites/keys`              | session        | Buat API key baru (`ww_` + 24 byte hex)       |
-| `POST /api/sites/verify`            | session        | Verifikasi domain via `webwatch-verify.txt`   |
-
-Semua error API berbentuk `{ "error": "<machine_code>" }` — snake_case, bahasa Inggris.
+| Name                      | Type           | Purpose                                                      |
+| ------------------------- | -------------- | ------------------------------------------------------------ |
+| `DB`                      | D1 binding     | Primary SQLite database (`d1_databases` in `wrangler.jsonc`) |
+| `ASSETS`                  | Assets binding | Static build assets served by Cloudflare                     |
+| `TELEGRAM_BOT_TOKEN`      | Secret         | Telegram Bot API authentication token                        |
+| `TELEGRAM_WEBHOOK_SECRET` | Secret         | Verifies `x-telegram-bot-api-secret-token` header            |
+| `TELEGRAM_BOT_USERNAME`   | Var (optional) | Fallback bot handle for UI connection links                  |
 
 ---
 
-## Sistem auth
+## Application Route Map
 
-Passwordless. Email → OTP. OTP hanya berguna bila chat Telegram sudah terhubung:
+### Web Pages
 
-1. Di `/auth`, user masukkan email → dashboard minta link `t.me/<bot>?start=<token>`
-   (membuat baris `telegram_links` berstatus `pending`, TTL 10 menit).
-2. User mengetuk `/start <token>` di Telegram → bot menandai baris `linked`, membuat user.
-3. Kembali di `/auth`, minta OTP → kode 6 digit di-hash (SHA-256), dikirim ke chat.
-   TTL 5 menit, maks 5 percobaan, maks 3 kode aktif, resend minimum 30 detik.
-4. Verifikasi `api/auth/verify` → cookie `ww_session` (HttpOnly, 30 hari).
+| Route        | Access        | Description                                         |
+| ------------ | ------------- | --------------------------------------------------- |
+| `/`          | Public        | Marketing landing page and platform features        |
+| `/docs`      | Public        | Complete SDK guides, API docs, and architecture     |
+| `/status`    | Public        | Real-time service status dashboard                  |
+| `/auth`      | Public        | Passwordless email login via Telegram OTP           |
+| `/dashboard` | Authenticated | Overview of monitored sites and recent exceptions   |
+| `/sites/$id` | Authenticated | Site detail: API keys, error log stream, settings   |
+| `/apm`       | Authenticated | Centralized APM error log explorer across all sites |
+| `/settings`  | Authenticated | Account preferences and linked Telegram account     |
+
+### API Endpoints
+
+| Endpoint                            | Auth           | Description                                             |
+| ----------------------------------- | -------------- | ------------------------------------------------------- |
+| `POST /api/ingest`                  | Bearer `ww_…`  | Ingest batches of error events from SDKs                |
+| `GET /api/public/sdk`               | Public         | Self-hosted browser SDK script (ES module)              |
+| `POST /api/public/telegram/webhook` | Secret header  | Inbound webhook from Telegram Bot API                   |
+| `GET /api/system-status`            | Public         | System status metrics JSON                              |
+| `GET /api/auth/me`                  | Session cookie | Returns current authenticated user                      |
+| `POST /api/auth/otp`                | Public         | Sends 6-digit login OTP to linked Telegram chat         |
+| `POST /api/auth/verify`             | Public         | Validates OTP and issues session cookie                 |
+| `GET /api/auth/link-status`         | Public         | Polls Telegram account linking status                   |
+| `POST /api/auth/logout`             | Session cookie | Clears active session                                   |
+| `GET /api/sites`                    | Session        | Lists user's monitored sites                            |
+| `POST /api/sites`                   | Session        | Registers a new site                                    |
+| `PATCH /api/sites`                  | Session        | Updates site name or active/pause status                |
+| `DELETE /api/sites`                 | Session        | Deletes a site and associated keys                      |
+| `GET /api/sites/detail?id=`         | Session        | Retrieves site details with recent event logs           |
+| `GET /api/sites/dashboard`          | Session        | Recent cross-site event feed for dashboard              |
+| `GET /api/sites/events?siteId=`     | Session        | Retrieves event history for a specific site             |
+| `GET /api/sites/keys?siteId=`       | Session        | Lists API keys for a site                               |
+| `POST /api/sites/keys`              | Session        | Generates a new API key (`ww_` + 24-byte hex)           |
+| `POST /api/sites/verify`            | Session        | Verifies domain ownership via webwatch-verify.txt probe |
+
+All API error responses follow the standard format: `{ "error": "<machine_code>" }`.
 
 ---
 
-## Siklus hidup situs
+## SDK Integration
 
-1. **Tambah** — dari bot (`/addsite <url>`) atau `POST /api/sites`. URL unik global; URL
-   internal/private IP ditolak. Status verifikasi awal `pending`.
-2. **Verifikasi** — host `webwatch-verify.txt` di origin berisi token verifikasi, lalu klik
-   verifikasi di dashboard (`POST /api/sites/verify`). Worker mengambil berkas
-   `https://<url>/webwatch-verify.txt` (timeout 10 detik) dan mencocokkan token.
-3. **API key** — buat `ww_…` di dashboard untuk situs terverifikasi.
-4. **Terima telemetri** — ingest hanya diterima saat `verification_status = 'verified'` **dan**
-   `is_active = 1`.
-5. **Hapus/jeda** — `DELETE /api/sites`, `PATCH /api/sites`, atau bot (`/removesite`,
-   `/pause`, `/resume`).
+### 1. The `@webwatch/sdk` npm Package (Node.js, Bun, Edge)
+
+Install the zero-dependency package:
+
+```sh
+npm install @webwatch/sdk
+# or
+bun add @webwatch/sdk
+```
+
+Configure environment variables:
+
+```sh
+export WEBWATCH_KEY="ww_your_api_key_here"
+export WEBWATCH_URL="https://your-webwatch-instance.com"
+```
+
+Initialize once at your application root:
+
+```js
+import "@webwatch/sdk";
+```
+
+#### Framework Middleware Helpers
+
+**Express:**
+
+```js
+import express from "express";
+import { expressErrorMiddleware, wrapAsync } from "@webwatch/sdk/express";
+
+const app = express();
+app.get(
+  "/users",
+  wrapAsync(async (req, res) => res.json({ ok: true })),
+);
+
+// Register error middleware after all application routes
+app.use(expressErrorMiddleware());
+```
+
+**Hono:**
+
+```js
+import { Hono } from "hono";
+import { honoOnError } from "@webwatch/sdk/hono";
+
+const app = new Hono();
+app.onError(honoOnError());
+```
+
+**Fastify:**
+
+```js
+import Fastify from "fastify";
+import { fastifyErrorHandler } from "@webwatch/sdk/fastify";
+
+const app = Fastify();
+app.setErrorHandler(fastifyErrorHandler());
+```
+
+**Next.js (App Router / Pages):**
+
+```ts
+// instrumentation.ts (in root or src/ directory)
+export async function register() {
+  await import("@webwatch/sdk/next").then((m) => m.register());
+}
+```
+
+### 2. Browser Zero-Install CDN Script
+
+```html
+<script type="module">
+  import { WebWatch } from "https://your-webwatch-instance.com/api/public/sdk";
+  WebWatch.init("ww_your_api_key_here", "https://your-webwatch-instance.com/api/ingest");
+</script>
+```
+
+### 3. Manual Error Capture
+
+```js
+import { capture, captureError } from "@webwatch/sdk";
+
+try {
+  await processPayment();
+} catch (err) {
+  captureError(err, {
+    url: "/api/checkout",
+    method: "POST",
+  });
+}
+```
+
+### 4. Docker & Container Environments
+
+No daemons, agents, or sidecars required. Provide your site credentials as runtime environment variables:
+
+```yaml
+# docker-compose.yml
+services:
+  api:
+    build: .
+    environment:
+      - NODE_ENV=production
+      - WEBWATCH_KEY=ww_your_api_key_here
+      - WEBWATCH_URL=https://your-webwatch-instance.com
+    ports:
+      - "3000:3000"
+```
+
+### 5. Monorepo Setups (Turborepo, Nx, pnpm workspaces)
+
+- **Isolated Projects (Recommended):** Register distinct sites in the WebWatch dashboard for `apps/web` and `apps/api`. Assign each its own API key (`ww_...`) to isolate Telegram alert channels and error streams.
+- **Shared Project:** Use a single API key across all workspace apps and distinguish services using the `environment` tag (e.g. `production-web`, `production-api`).
+- **Headless API Domain Verification:** If a backend microservice in your monorepo doesn't serve static files, expose a lightweight route to return your verification token:
+  ```js
+  app.get("/webwatch-verify.txt", (req, res) => res.send("your_verification_token"));
+  ```
 
 ---
 
-## Kontrak ingest
+## Ingestion HTTP API
+
+User applications push telemetry batches via `POST /api/ingest`:
 
 ```http
 POST /api/ingest
-Authorization: Bearer ww_your_api_key
+Authorization: Bearer ww_your_site_api_key
 Content-Type: application/json
 
 {
   "events": [
     {
       "type": "backend_error",
-      "message": "Payment gateway timeout",
+      "message": "Database connection pool exhausted",
       "environment": "production",
-      "stack_trace": "TypeError: ...\n    at ...",
-      "url": "/api/pay",
-      "method": "POST",
-      "user_agent": "webwatch-sdk/0.1.0 (node)"
+      "stack_trace": "Error: Connection timeout\n    at Pool.connect (/app/db.js:42:15)",
+      "url": "/api/users",
+      "method": "GET",
+      "user_agent": "webwatch-sdk/0.1.0 (node/20.10.0)"
     }
   ]
 }
 ```
 
-Kode error: `missing_token`, `invalid_key`, `site_not_verified`, `invalid_payload`.
-CORS diperbolehkan dari origin mana pun karena SDK browser berjalan di situs pelanggan.
+**Expected Responses:**
+
+- `200 OK` — `{ "ok": true, "ingested": 1 }`
+- `401 Unauthorized` — `{ "error": "missing_token" }` or `{ "error": "invalid_key" }`
+- `403 Forbidden` — `{ "error": "site_not_verified" }`
+- `400 Bad Request` — `{ "error": "invalid_payload" }`
 
 ---
 
-## SDK
+## Telegram Bot Commands
 
-### Opsi A — paket npm (server + runtime ter-bundle)
-
-```sh
-npm install @webwatch/sdk
-```
-
-```sh
-export WEBWATCH_KEY="ww_..."
-export WEBWATCH_URL="https://<deployment-webwatch-kamu>"
-```
-
-```js
-import "@webwatch/sdk"; // auto-capture + batching, selebihnya otomatis
-```
-
-Helper framework:
-
-```js
-// Express
-import { expressErrorMiddleware, wrapAsync } from "@webwatch/sdk/express";
-app.use(expressErrorMiddleware()); // setelah semua route
-
-// Hono
-import { honoOnError } from "@webwatch/sdk/hono";
-app.onError(honoOnError());
-
-// Fastify
-import { fastifyErrorHandler } from "@webwatch/sdk/fastify";
-fastify.setErrorHandler(fastifyErrorHandler());
-```
-
-```ts
-// Next.js — instrumentation.ts
-export async function register() {
-  await import("@webwatch/sdk/next").then((m) => m.register());
-}
-```
-
-Perilaku: queue memori (maks 1000 event, paling tua dibuang), flush per 50 event atau 5 detik,
-retry eksponensial 3x untuk 5xx/408/429 & error jaringan (400/401/403/404 gagal cepat),
-throttle duplikat 5 detik. Dokumentasi lengkap: [`packages/webwatch-sdk/README.md`](packages/webwatch-sdk/README.md).
-
-### Opsi B — CDN build (tanpa npm install)
-
-```js
-import { WebWatch } from "https://your-domain.example/api/public/sdk";
-
-WebWatch.init("ww_your_api_key", "https://your-domain.example/api/ingest");
-```
-
-`init()` otomatis menangkap `window.error` → `frontend_error` dan
-`window.unhandledrejection` → `frontend_promise_error`.
-
-### Capture manual (semua kanal)
-
-```js
-await WebWatch.capture(
-  "api_error", // tipe event
-  "Payment gateway timeout", // pesan
-  error.stack, // stack trace (nullable)
-  "/api/pay", // url
-  "POST", // method
-);
-```
-
-> Paket `@webwatch/sdk@0.1.0` sudah tersedia di registry npm. Source-nya ada di
-> `packages/webwatch-sdk/` (build `bun run build:sdk`, diuji vitest). Kanal tanpa-install tetap
-> tersedia lewat `/api/public/sdk`. Kedua kanal merupakan implementasi terpisah atas kontrak
-> yang sama, lihat [DESIGN.md](DESIGN.md) untuk daftar gap terkini.
+| Command            | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `/start <token>`   | Links your Telegram account to your WebWatch login email |
+| `/help`            | Displays available bot commands                          |
+| `/addsite <url>`   | Quickly registers a new site                             |
+| `/listsite`        | Lists all registered sites and statuses                  |
+| `/removesite <id>` | Removes a site (supports 8-char short ID)                |
+| `/pause <id>`      | Pauses APM ingestion for a site                          |
+| `/resume <id>`     | Resumes APM ingestion for a site                         |
 
 ---
 
-## Perintah bot Telegram
+## Database Schema (Cloudflare D1)
 
-| Perintah           | Fungsi                                        |
-| ------------------ | --------------------------------------------- |
-| `/start <token>`   | Hubungkan chat ke akun (dari halaman `/auth`) |
-| `/help`            | Bantuan                                       |
-| `/addsite <url>`   | Tambah situs                                  |
-| `/listsite`        | Daftar situs                                  |
-| `/removesite <id>` | Hapus situs                                   |
-| `/pause <id>`      | Jeda ingest APM                               |
-| `/resume <id>`     | Lanjutkan ingest APM                          |
-
-`<id>` boleh diisi 8 karakter pertama dari ID situs.
+| Table            | Key Columns                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `users`          | `id`, `email` (unique), `chat_id`, `tg_username`                                                                    |
+| `sessions`       | `token_hash` (PK), `user_id`, `expires_at` (raw cookie never stored in DB)                                          |
+| `otp_codes`      | `email`, `code_hash`, `expires_at`, `used`, `attempts`                                                              |
+| `telegram_links` | `token` (PK), `email`, `chat_id`, `status` (`pending`/`linked`), `expires_at`                                       |
+| `sites`          | `id`, `user_id`, `name`, `url` (globally unique), `is_active`, `verification_token`, `verification_status`          |
+| `api_keys`       | `key` (`ww_…`, PK), `site_id`, `name`                                                                               |
+| `apm_events`     | `id`, `site_id`, `environment`, `event_type`, `message`, `stack_trace`, `url`, `method`, `user_agent`, `created_at` |
 
 ---
 
-## Data model (Cloudflare D1)
-
-Skema final (setelah migrasi 0007) — timestamp ISO-8601 UTC:
-
-| Tabel            | Kolom penting                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------ |
-| `users`          | `id`, `email` (unik), `chat_id`, `tg_username`                                                         |
-| `sessions`       | `token_hash` (PK), `user_id`, `expires_at` — token mentah hanya hidup di cookie                        |
-| `otp_codes`      | `email`, `code_hash`, `expires_at`, `used`, `attempts`                                                 |
-| `telegram_links` | `token` (PK), `email`, `chat_id`, `status` (`pending`/`linked`), `expires_at`                          |
-| `sites`          | `id`, `user_id`, `name`, `url` (unik global), `is_active`, `verification_token`, `verification_status` |
-| `api_keys`       | `key` (`ww_…`, PK), `site_id`, `name`                                                                  |
-| `apm_events`     | `site_id`, `environment`, `event_type`, `message`, `stack_trace`, `url`, `method`, `user_agent`        |
-
-Migrasi ada di `migrations/d1/0001`–`0007`. Selengkapnya: [DESIGN.md](DESIGN.md).
-
----
-
-## Struktur repo
+## Repository Structure
 
 ```
 src/
-├── routes/                        # TanStack file-based routes (halaman + API, handler tipis)
-├── lib/                           # Logika bisnis (*.server.ts punya akses D1/sekret/jaringan)
-│   ├── auth.server.ts             # Session/OTP/link API
-│   ├── auth-flows.server.ts       # HTTP-shaped auth operations
-│   ├── sites-api.server.ts        # Site CRUD + verifikasi + SSRF guard
-│   ├── bot.server.ts              # Telegram command dispatcher
-│   ├── telegram.server.ts         # sendTelegram + formatter pesan
-│   └── wrangler-env.ts            # Akses tunggal binding D1 & sekret
+├── routes/                        # TanStack Start file-based routing
+│   ├── _authenticated/            # Protected app screens (dashboard, apm, sites.$id, settings)
+│   ├── api/                       # HTTP API routes (ingest, sites, auth, telegram webhook)
+│   ├── docs.tsx                   # In-app interactive documentation page
+│   ├── index.tsx                  # Landing page
+│   └── status.tsx                 # Public system status page
+├── lib/                           # Core business logic (*.server.ts modules)
+│   ├── auth.server.ts             # Session management & OTP logic
+│   ├── sites-api.server.ts        # Site lifecycle, API keys, validation
+│   ├── bot.server.ts              # Telegram bot interaction & commands
+│   ├── telegram.server.ts         # Telegram API client & alert formatting
+│   └── wrangler-env.ts            # Single accessor for D1 bindings & secrets
 ├── components/
-│   ├── app/                       # Shell autentikasi (sidebar, stat card, dsb.)
-│   ├── marketing/                 # Blok landing
-│   └── ui/                        # shadcn/ui primitives (generated)
-└── hooks/
-packages/webwatch-sdk/              # Paket npm @webwatch/sdk (build: bun run build:sdk)
-migrations/d1/                       # Migrasi D1 (0001–0007)
-public/                              # Aset statis
-scripts/                             # Generator aset brand
-wrangler.jsonc                       # Konfigurasi Worker utama
+│   ├── app/                       # Application shell, sidebar, stat cards, code blocks
+│   ├── marketing/                 # Landing page sections
+│   └── ui/                        # Accessible UI primitives (shadcn / Radix)
+packages/webwatch-sdk/             # Official @webwatch/sdk npm package
+migrations/d1/                     # D1 schema migrations (0001–0007)
+wrangler.jsonc                     # Cloudflare Worker configuration
 ```
 
 ---
 
-## Keterbatasan yang diketahui
+## License
 
-Ini gap implementasi nyata yang terdokumentasi di [DESIGN.md](DESIGN.md), dicantumkan agar
-ekspektasi benar sebelum deploy:
-
-| Gap                                                 | Dampak                                             |
-| --------------------------------------------------- | -------------------------------------------------- |
-| `/api/ingest` tanpa rate limiting                   | Satu API key bisa memasukkan baris tanpa batas     |
-| `apm_events` tidak pernah di-purge                  | Tabel tumbuh tanpa batas                           |
-| API key disimpan plaintext di `api_keys.key`        | Rotasi/revocation terbatas pada pembuatan & daftar |
-| SSRF guard hanya memeriksa hostname string          | Hostname yang resolve ke IP privat bisa lolos      |
-| SSRF guard hanya memeriksa hostname string          | Hostname yang resolve ke IP privat bisa lolos      |
-| `is_active` situs dipakai dobel (toggle ingest APM) | Tidak ada konsep jeda "pantau tapi simpan"         |
-| Kanal CDN vs paket npm: dua implementasi terpisah   | Bisa beda perilaku; lihat gap G0 di DESIGN.md      |
-
-Punya beberapa menit ekstra? Baca
-[DESIGN.md](DESIGN.md) untuk model data, alur keamanan, dan daftar gap lengkap sebelum
-mengubah struktur.
-
----
-
-## Kontribusi
-
-Issues dan pull requests terbuka:
-[github.com/hsanmz/webwatch](https://github.com/hsanmz/webwatch). Lihat
-[AGENTS.md](AGENTS.md) untuk konvensi yang dipakai kontributor dan coding agent.
+MIT © [HugoEdmoundo](https://github.com/hsanmz/webwatch)
